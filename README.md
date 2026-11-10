@@ -8,7 +8,7 @@ A Python project that analyzes songs: detect the tempo (BPM), detect the musical
 
 - [x] Scan a folder of audio files and report duration, sample rate and channels
 - [x] Tempo detection
-- [ ] Key detection
+- [x] Key detection
 - [ ] Vocal / instrumental separation (using a pretrained model)
 - [ ] Web interface and API
 - [ ] Docker packaging
