@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The API dependency set is a superset of what the tests import
+      # (librosa, soundfile, numpy); torch/demucs stay out.
+      - run: pip install -r requirements-api.txt -r requirements-dev.txt
+
+      - run: pytest -v

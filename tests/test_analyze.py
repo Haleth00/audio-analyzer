@@ -1,0 +1,85 @@
+"""Tests for analyze.py.
+
+No audio files are shipped: everything is synthesized. A melody built
+from a scale's notes has a known key, and a click track has a known
+tempo -- so the tests generate their own ground truth.
+"""
+
+import numpy as np
+import soundfile as sf
+
+from analyze import analyze_file, estimate_key, estimate_tempo
+
+SR = 22050
+
+# Note names -> frequencies in Hz (octave 4).
+NOTES = {
+    "C": 261.63, "C#": 277.18, "D": 293.66, "D#": 311.13,
+    "E": 329.63, "F": 349.23, "F#": 369.99, "G": 392.00,
+    "G#": 415.30, "A": 440.00, "A#": 466.16, "B": 493.88,
+}
+
+
+def tone(freq, duration=0.6, amplitude=0.5):
+    """One steady tone, with short fades so it doesn't click."""
+    n = int(SR * duration)
+    t = np.linspace(0, duration, n, endpoint=False)
+    wave = amplitude * np.sin(2 * np.pi * freq * t)
+    fade = int(SR * 0.01)
+    wave[:fade] *= np.linspace(0, 1, fade)
+    wave[-fade:] *= np.linspace(1, 0, fade)
+    return wave
+
+
+def melody(note_names):
+    """Concatenate one tone per note name."""
+    return np.concatenate([tone(NOTES[name]) for name in note_names])
+
+
+def clicks(bpm, seconds=8.0):
+    """A click track: a short 1 kHz burst on every beat."""
+    out = np.zeros(int(SR * seconds))
+    burst = tone(1000.0, duration=0.02, amplitude=0.8)
+    for beat in np.arange(0, seconds - 0.1, 60.0 / bpm):
+        start = int(beat * SR)
+        out[start:start + len(burst)] += burst
+    return out
+
+
+# Tonic, fifth and third get the most repeats -- that emphasis is what
+# the Krumhansl-Kessler profiles encode, so the melodies mirror it.
+C_MAJOR = ["C", "G", "E", "C", "G", "C",
+           "F", "D", "A", "B", "E", "G", "C", "C"]
+A_MINOR = ["A", "E", "C", "A", "E", "A",
+           "D", "F", "G", "B", "C", "E", "A", "A"]
+
+
+def test_key_of_major_melody():
+    key, confidence = estimate_key(melody(C_MAJOR), SR)
+    assert key == "C major"
+    assert confidence > 0.5
+
+
+def test_key_of_minor_melody():
+    key, _confidence = estimate_key(melody(A_MINOR), SR)
+    assert key == "A minor"
+
+
+def test_tempo_of_click_track():
+    bpm = estimate_tempo(clicks(120), SR)
+    assert abs(bpm - 120) < 3
+
+
+def test_analyze_file_end_to_end(tmp_path):
+    """analyze_file() on a written WAV: header fields + analyses."""
+    path = tmp_path / "song.wav"
+    y = melody(C_MAJOR)
+    sf.write(path, y, SR)
+
+    result = analyze_file(path)
+    assert result["file"] == "song.wav"
+    assert result["sample_rate_hz"] == SR
+    assert result["channels"] == 1
+    assert abs(result["duration_s"] - len(y) / SR) < 0.1
+    assert result["key"] == "C major"
+    assert result["tempo_bpm"] is not None

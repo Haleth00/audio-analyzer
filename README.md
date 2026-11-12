@@ -1,5 +1,7 @@
 # Audio Analyzer
 
+[![CI](https://github.com/Haleth00/audio-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/Haleth00/audio-analyzer/actions/workflows/ci.yml)
+
 A Python project that analyzes songs: detect the tempo (BPM), detect the musical key, and separate vocals from the instrumental. The long-term goal is a small web service that does this from an uploaded audio file.
 
 **Status:** early work in progress. I'm learning Python while building it, so the code is minimal for now.
@@ -76,6 +78,17 @@ docker run -p 8000:8000 audio-analyzer
 The image is deliberately slim (~900 MB): it installs only
 `requirements-api.txt`, which excludes torch and Demucs -- the container
 analyzes tempo and key, while separation stays on the host CLI for now.
+
+## Development
+
+Run the test suite (all test audio is synthesized -- no fixture files):
+
+```
+pip install -r requirements-dev.txt
+pytest -v
+```
+
+GitHub Actions runs the same suite on every push.
 
 ## Notes
 
