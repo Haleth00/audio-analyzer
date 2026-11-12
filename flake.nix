@@ -19,6 +19,9 @@
           pkgs.stdenv.cc.cc.lib
           pkgs.libsndfile
           pkgs.zlib
+          # NVIDIA driver's libcuda, needed by pip-installed CUDA torch
+          # (not in ldconfig on NixOS). makeLibraryPath adds "/lib".
+          "/run/opengl-driver"
         ];
 
         shellHook = ''
