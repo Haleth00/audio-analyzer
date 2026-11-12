@@ -79,7 +79,18 @@ curl http://127.0.0.1:8000/separate/<job_id>/stems/vocals -o vocals.flac
 
 Separation needs torch and benefits hugely from a GPU, so it runs on
 the host server only -- not inside the slim Docker container, which
-serves `/analyze` alone.
+serves `/analyze` alone. Lyrics transcription (`POST /transcribe`,
+same job protocol) needs Whisper and is host-only too; the page greys
+out whatever the deployment can't do.
+
+## Planned features (free expansion)
+
+- [x] Lyrics transcription (Whisper)
+- [ ] Chord detection
+- [ ] Song structure segmentation
+- [ ] Loudness / dynamics (EBU R128)
+- [ ] Library database + search
+- [ ] Harmonic-mix playlist builder
 
 ## Docker
 

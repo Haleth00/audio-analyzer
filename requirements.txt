@@ -3,6 +3,7 @@ soundfile
 numpy
 torch
 demucs
+openai-whisper
 fastapi
 uvicorn
 python-multipart

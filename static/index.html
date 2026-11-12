@@ -23,6 +23,11 @@
         also separate vocals / instrumental
       </label>
 
+      <label class="checkbox" id="transcribe-wrap">
+        <input type="checkbox" id="transcribe-checkbox">
+        also transcribe lyrics <span class="exp">(experimental)</span>
+      </label>
+
       <button id="go" disabled>Analyze</button>
     </form>
 
@@ -46,6 +51,11 @@
             <a id="dl-inst" download="no_vocals.flac">download</a>
           </div>
         </div>
+      </div>
+
+      <div id="lyrics" hidden>
+        <p id="lyrics-status">queued…</p>
+        <pre id="lyrics-text" hidden></pre>
       </div>
     </section>
   </main>

@@ -78,3 +78,35 @@ def test_capabilities_reports_separation(monkeypatch):
     response = client.get("/capabilities")
     assert response.status_code == 200
     assert isinstance(response.json()["separation"], bool)
+    assert isinstance(response.json()["transcription"], bool)
+
+
+def fake_transcribe_file(path, model_name="small"):
+    return {"text": "la la la, la la la la", "language": "en"}
+
+
+def test_transcription_job_flow(tmp_path, monkeypatch):
+    monkeypatch.setattr(server.transcribe, "transcribe_file",
+                        fake_transcribe_file)
+    client = TestClient(server.app)
+
+    wav = tmp_path / "song.wav"
+    sf.write(wav, np.zeros(22050), 22050)
+
+    with open(wav, "rb") as f:
+        response = client.post(
+            "/transcribe", files={"file": ("song.wav", f, "audio/wav")}
+        )
+    assert response.status_code == 202
+    job = response.json()
+    assert job["status"] == "pending"
+
+    state = client.get(f"/transcribe/{job['job_id']}").json()
+    assert state["status"] == "done"
+    assert state["lyrics"] == "la la la, la la la la"
+    assert state["language"] == "en"
+
+
+def test_unknown_transcription_job_is_404(monkeypatch):
+    client = make_client(monkeypatch)
+    assert client.get("/transcribe/nope").status_code == 404

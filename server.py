@@ -20,16 +20,19 @@ from fastapi.staticfiles import StaticFiles
 
 import analyze
 import separation
+import transcribe
 
 BASE_DIR = Path(__file__).parent
 
-# Separation needs torch and demucs, which the slim Docker container
-# deliberately leaves out. Probe for them without importing (which
-# would be slow) and let the front-end know what's on the menu.
+# Separation needs torch and demucs, transcription needs whisper --
+# none of which the slim Docker container has. Probe for them without
+# importing (which would be slow) and let the front-end know what's
+# on the menu.
 SEPARATION_AVAILABLE = (
     importlib.util.find_spec("torch") is not None
     and importlib.util.find_spec("demucs") is not None
 )
+TRANSCRIPTION_AVAILABLE = importlib.util.find_spec("whisper") is not None
 
 app = FastAPI(title="Audio Analyzer", version="0.3.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"),
@@ -53,7 +56,10 @@ def index():
 @app.get("/capabilities")
 def capabilities():
     """What this deployment can do (the slim container: no torch)."""
-    return {"separation": SEPARATION_AVAILABLE}
+    return {
+        "separation": SEPARATION_AVAILABLE,
+        "transcription": TRANSCRIPTION_AVAILABLE,
+    }
 
 
 @app.get("/health")
@@ -166,3 +172,60 @@ def download_stem(job_id: str, stem: str):
     path = JOBS_DIR / job_id / STEM_FILES[stem]
     return FileResponse(path, media_type="audio/flac",
                         filename=STEM_FILES[stem])
+
+
+@app.post("/transcribe", status_code=202)
+def start_transcription(file: UploadFile, background_tasks: BackgroundTasks):
+    """Accept a file for lyrics transcription (another async job).
+
+    Same contract as /separate: 202 + job id, then poll
+    GET /transcribe/{job_id} until the lyrics arrive in the JSON.
+    """
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix and suffix not in analyze.AUDIO_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"unsupported file type {suffix!r}; "
+                   f"expected one of {sorted(analyze.AUDIO_EXTENSIONS)}",
+        )
+
+    job_id = uuid.uuid4().hex[:12]
+    job_dir = JOBS_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    with open(job_dir / f"input{suffix}", "wb") as out:
+        shutil.copyfileobj(file.file, out)
+
+    JOBS[job_id] = {
+        "job_id": job_id,
+        "kind": "transcription",
+        "file": file.filename,
+        "status": "pending",
+    }
+    background_tasks.add_task(run_transcription_job, job_id)
+    return JOBS[job_id] | {"poll": f"/transcribe/{job_id}"}
+
+
+def run_transcription_job(job_id):
+    """Do the transcription; runs in a background thread."""
+    job = JOBS[job_id]
+    job["status"] = "running"
+    job_dir = JOBS_DIR / job_id
+    try:
+        input_path = next(job_dir.glob("input*"))  # the one we saved
+        result = transcribe.transcribe_file(input_path)
+        job["status"] = "done"
+        # Lyrics are small, so they ride along in the JSON response
+        # instead of being a file download like the stems.
+        job["lyrics"] = result["text"]
+        job["language"] = result["language"]
+    except Exception as error:
+        job["status"] = "failed"
+        job["error"] = str(error)
+
+
+@app.get("/transcribe/{job_id}")
+def transcription_status(job_id: str):
+    """Poll a transcription job: pending -> running -> done | failed."""
+    if job_id not in JOBS:
+        raise HTTPException(status_code=404, detail="unknown job id")
+    return JOBS[job_id]
