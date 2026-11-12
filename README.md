@@ -11,7 +11,7 @@ A Python project that analyzes songs: detect the tempo (BPM), detect the musical
 - [x] Key detection
 - [x] Vocal / instrumental separation (using a pretrained model)
 - [x] Web interface and API
-- [ ] Docker packaging
+- [x] Docker packaging
 
 ## Setup (Windows)
 
@@ -53,6 +53,19 @@ terminal:
 ```
 curl -F "file=@audio/some_song.flac" http://127.0.0.1:8000/analyze
 ```
+
+## Docker
+
+Build and run the API in a container:
+
+```
+docker build -t audio-analyzer .
+docker run -p 8000:8000 audio-analyzer
+```
+
+The image is deliberately slim (~900 MB): it installs only
+`requirements-api.txt`, which excludes torch and Demucs -- the container
+analyzes tempo and key, while separation stays on the host CLI for now.
 
 ## Notes
 

@@ -1,0 +1,11 @@
+.git/
+.venv/
+.direnv/
+audio/
+separated/
+__pycache__/
+*.pyc
+flake.nix
+flake.lock
+.envrc
+Dockerfile

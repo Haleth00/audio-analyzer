@@ -1,0 +1,10 @@
+# Server-only dependencies, used by the Docker image.
+# A subset of requirements.txt: torch/demucs are excluded because the
+# API analyzes tempo and key only -- no separation -- which keeps the
+# image small (CPU torch alone would add over a gigabyte).
+librosa
+soundfile
+numpy
+fastapi
+uvicorn
+python-multipart
