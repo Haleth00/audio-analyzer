@@ -89,6 +89,16 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 #sep-status, #lyrics-status { color: var(--muted); }
 
+#chord-details { margin: 0.75rem 0; }
+#chord-details summary { cursor: pointer; color: var(--muted); }
+
+.chord-line {
+  display: flex;
+  gap: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+.chord-when { color: var(--muted); width: 7rem; }
+
 #lyrics-text {
   background: var(--bg);
   border: 1px solid var(--border);

@@ -31,10 +31,14 @@ def print_result(result):
               f"(correlation {result['key_confidence']})")
     else:
         print("  key:         could not estimate")
+    if result["chord_progression"] is not None:
+        print(f"  chords:      {result['chord_progression']}")
+    else:
+        print("  chords:      could not estimate")
 
 
 CSV_FIELDS = ["file", "duration_s", "sample_rate_hz", "channels",
-              "tempo_bpm", "key", "key_confidence"]
+              "tempo_bpm", "key", "key_confidence", "chord_progression"]
 
 
 def write_report(results, csv_path):

@@ -86,7 +86,7 @@ out whatever the deployment can't do.
 ## Planned features (free expansion)
 
 - [x] Lyrics transcription (Whisper)
-- [ ] Chord detection
+- [x] Chord detection
 - [ ] Song structure segmentation
 - [ ] Loudness / dynamics (EBU R128)
 - [ ] Library database + search

@@ -8,7 +8,7 @@ tempo -- so the tests generate their own ground truth.
 import numpy as np
 import soundfile as sf
 
-from analyze import analyze_file, estimate_key, estimate_tempo
+from analyze import analyze_file, estimate_chords, estimate_key, estimate_tempo
 
 SR = 22050
 
@@ -34,6 +34,16 @@ def tone(freq, duration=0.6, amplitude=0.5):
 def melody(note_names):
     """Concatenate one tone per note name."""
     return np.concatenate([tone(NOTES[name]) for name in note_names])
+
+
+def triad(root, kind="", duration=2.0):
+    """Stacked tones forming one chord: triad("C") is C major,
+    triad("A", "m") is A minor. Ground truth for chord detection."""
+    offsets = [0, 4, 7] if kind == "" else [0, 3, 7]
+    return sum(
+        tone(NOTES[root] * 2 ** (offset / 12), duration, amplitude=0.3)
+        for offset in offsets
+    )
 
 
 def clicks(bpm, seconds=8.0):
@@ -70,6 +80,15 @@ def test_tempo_of_click_track():
     assert abs(bpm - 120) < 3
 
 
+def test_chord_progression():
+    y = np.concatenate([triad("C"), triad("A", "m"),
+                        triad("F"), triad("G")])
+    result = estimate_chords(y, SR)
+    names = [s["chord"] for s in result["segments"]]
+    assert names == ["C", "Am", "F", "G"]
+    assert result["segments"][0]["confidence"] > 0.8
+
+
 def test_analyze_file_end_to_end(tmp_path):
     """analyze_file() on a written WAV: header fields + analyses."""
     path = tmp_path / "song.wav"
@@ -83,3 +102,4 @@ def test_analyze_file_end_to_end(tmp_path):
     assert abs(result["duration_s"] - len(y) / SR) < 0.1
     assert result["key"] == "C major"
     assert result["tempo_bpm"] is not None
+    assert result["chord_progression"] is not None

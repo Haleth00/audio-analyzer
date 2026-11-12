@@ -97,6 +97,7 @@ function renderFacts(data) {
     ["tempo", data.tempo_bpm != null ? `${data.tempo_bpm} BPM` : "unknown"],
     ["key", data.key
       ? `${data.key} (conf ${data.key_confidence})` : "unknown"],
+    ["chords", data.chord_progression || "unknown"],
   ];
   for (const [label, value] of rows) {
     const dt = document.createElement("dt");
@@ -105,6 +106,32 @@ function renderFacts(data) {
     dd.textContent = value ?? "—";
     facts.append(dt, dd);
   }
+
+  renderChordTimeline(data.chord_segments);
+}
+
+function renderChordTimeline(segments) {
+  const timeline = document.getElementById("chord-timeline");
+  timeline.replaceChildren();
+  timeline.parentElement.hidden = !segments;
+  if (!segments) return;
+  for (const seg of segments) {
+    const line = document.createElement("div");
+    line.className = "chord-line";
+    const when = document.createElement("span");
+    when.className = "chord-when";
+    when.textContent = `${fmtTime(seg.start)}–${fmtTime(seg.end)}`;
+    const what = document.createElement("span");
+    what.textContent = seg.chord;
+    line.append(when, what);
+    timeline.append(line);
+  }
+}
+
+function fmtTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 // Poll a job endpoint every 2 s until it is done or failed. Shared
