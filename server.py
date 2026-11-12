@@ -3,19 +3,31 @@
 Development run:  uvicorn server:app --reload
 Then open:        http://127.0.0.1:8000/docs
 
-The analyses are imported from analyze.py -- the same functions the
-scan.py CLI uses.
+Analyses come from analyze.py; separation from separation.py.
+Separation is slow and needs torch, so it runs as a background job:
+POST /separate returns a job id immediately, and you poll
+GET /separate/{job_id} until the stems are ready to download.
 """
 
 import shutil
-import tempfile
+import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 import analyze
+import separation
 
-app = FastAPI(title="Audio Analyzer", version="0.1.0")
+app = FastAPI(title="Audio Analyzer", version="0.2.0")
+
+# In-memory job registry. Fine for one process and one user; a restart
+# forgets every job, and multiple uvicorn workers would each see only
+# their own dict -- a database is the eventual answer, not today.
+JOBS: dict[str, dict] = {}
+JOBS_DIR = Path("jobs")
+
+STEM_FILES = {"vocals": "vocals.flac", "instrumental": "no_vocals.flac"}
 
 
 @app.get("/health")
@@ -40,15 +52,91 @@ def analyze_upload(file: UploadFile):
 
     # The upload arrives as a stream; park it in a temporary file so
     # the analysis functions can read it like any other file.
-    tmp = tempfile.NamedTemporaryFile(suffix=suffix or "", delete=False)
+    tmp = Path("/tmp") / f"analyze-{uuid.uuid4().hex}{suffix}"
     try:
-        with tmp:
-            shutil.copyfileobj(file.file, tmp)
-        result = analyze.analyze_file(Path(tmp.name))
+        with open(tmp, "wb") as out:
+            shutil.copyfileobj(file.file, out)
+        result = analyze.analyze_file(tmp)
         # Report the name the client sent, not our temp file's name.
         if file.filename:
             result["file"] = file.filename
         return result
     finally:
         # Runs whether analysis succeeded or raised.
-        Path(tmp.name).unlink(missing_ok=True)
+        tmp.unlink(missing_ok=True)
+
+
+@app.post("/separate", status_code=202)
+def start_separation(file: UploadFile, background_tasks: BackgroundTasks):
+    """Accept a file for vocal/instrumental separation.
+
+    Returns immediately with a job id; poll GET /separate/{job_id}
+    until status is "done" (or "failed"). 202 is the status code for
+    "accepted, but the work has not finished yet".
+    """
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix and suffix not in analyze.AUDIO_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"unsupported file type {suffix!r}; "
+                   f"expected one of {sorted(analyze.AUDIO_EXTENSIONS)}",
+        )
+
+    job_id = uuid.uuid4().hex[:12]
+    job_dir = JOBS_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    with open(job_dir / f"input{suffix}", "wb") as out:
+        shutil.copyfileobj(file.file, out)
+
+    JOBS[job_id] = {
+        "job_id": job_id,
+        "file": file.filename,
+        "status": "pending",
+    }
+    # The task runs in a worker thread once this response has been sent.
+    background_tasks.add_task(run_job, job_id)
+    # dict | dict merges two dicts into a new one (Python 3.9+).
+    return JOBS[job_id] | {"poll": f"/separate/{job_id}"}
+
+
+def run_job(job_id):
+    """Do the actual separation; runs in a background thread."""
+    job = JOBS[job_id]
+    job["status"] = "running"
+    job_dir = JOBS_DIR / job_id
+    try:
+        input_path = next(job_dir.glob("input*"))  # the one we saved
+        separation.separate_file(input_path, job_dir)
+        job["status"] = "done"
+        job["vocals_url"] = f"/separate/{job_id}/stems/vocals"
+        job["instrumental_url"] = f"/separate/{job_id}/stems/instrumental"
+    except Exception as error:
+        job["status"] = "failed"
+        job["error"] = str(error)
+
+
+@app.get("/separate/{job_id}")
+def job_status(job_id: str):
+    """Poll a separation job: pending -> running -> done | failed."""
+    if job_id not in JOBS:
+        raise HTTPException(status_code=404, detail="unknown job id")
+    return JOBS[job_id]
+
+
+@app.get("/separate/{job_id}/stems/{stem}")
+def download_stem(job_id: str, stem: str):
+    """Download one stem of a finished job."""
+    if job_id not in JOBS:
+        raise HTTPException(status_code=404, detail="unknown job id")
+    job = JOBS[job_id]
+    if job["status"] != "done":
+        # 409 = conflict: the request makes sense, but not in the
+        # job's current state.
+        raise HTTPException(status_code=409,
+                            detail=f"job is {job['status']}, not done")
+    if stem not in STEM_FILES:
+        raise HTTPException(status_code=404,
+                            detail=f"stem must be one of {sorted(STEM_FILES)}")
+    path = JOBS_DIR / job_id / STEM_FILES[stem]
+    return FileResponse(path, media_type="audio/flac",
+                        filename=STEM_FILES[stem])

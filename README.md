@@ -66,6 +66,20 @@ terminal:
 curl -F "file=@audio/some_song.flac" http://127.0.0.1:8000/analyze
 ```
 
+Separation runs as a background job, since it takes seconds to minutes:
+upload and get a job id (HTTP 202), poll until done, then download the
+stems:
+
+```
+curl -F "file=@audio/some_song.flac" http://127.0.0.1:8000/separate   # -> {"job_id": ...}
+curl http://127.0.0.1:8000/separate/<job_id>                          # -> status + stem URLs
+curl http://127.0.0.1:8000/separate/<job_id>/stems/vocals -o vocals.flac
+```
+
+Separation needs torch and benefits hugely from a GPU, so it runs on
+the host server only -- not inside the slim Docker container, which
+serves `/analyze` alone.
+
 ## Docker
 
 Build and run the API in a container:
