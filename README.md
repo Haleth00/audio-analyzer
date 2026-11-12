@@ -83,13 +83,25 @@ serves `/analyze` alone. Lyrics transcription (`POST /transcribe`,
 same job protocol) needs Whisper and is host-only too; the page greys
 out whatever the deployment can't do.
 
+## Library
+
+Every analysis -- scanner runs and API uploads alike -- is remembered
+in an SQLite database at `~/.local/share/audio-analyzer/library.db`;
+re-analyzing a file replaces its row.
+
+```
+python scan.py --no-save        # scan without recording
+python lookup.py --key "C minor" --bpm-min 100 --bpm-max 140 --order tempo
+curl "http://127.0.0.1:8000/library?key=C%20minor&order=recent"
+```
+
 ## Planned features (free expansion)
 
 - [x] Lyrics transcription (Whisper)
 - [x] Chord detection
 - [x] Song structure segmentation
 - [x] Loudness / dynamics (EBU R128)
-- [ ] Library database + search
+- [x] Library database + search
 - [ ] Harmonic-mix playlist builder
 
 ## Docker

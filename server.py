@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 import analyze
+import library
 import separation
 import transcribe
 
@@ -92,10 +93,36 @@ def analyze_upload(file: UploadFile):
         # Report the name the client sent, not our temp file's name.
         if file.filename:
             result["file"] = file.filename
+        try:
+            library.record(result)
+        except Exception:
+            # The analysis succeeded; failing to remember it must not
+            # fail the request.
+            pass
         return result
     finally:
         # Runs whether analysis succeeded or raised.
         tmp.unlink(missing_ok=True)
+
+
+@app.get("/library")
+def library_search(key: str | None = None,
+                   bpm_min: float | None = None,
+                   bpm_max: float | None = None,
+                   order: str = "file",
+                   limit: int = 100):
+    """Search the recorded analysis library.
+
+    Query parameters become function arguments automatically.
+    """
+    if order not in library.ORDER_COLUMNS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"order must be one of {sorted(library.ORDER_COLUMNS)}",
+        )
+    tracks = library.search(key=key, bpm_min=bpm_min, bpm_max=bpm_max,
+                            order=order, limit=limit)
+    return {"count": len(tracks), "tracks": tracks}
 
 
 @app.post("/separate", status_code=202)

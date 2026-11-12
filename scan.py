@@ -13,6 +13,7 @@ import csv
 from pathlib import Path
 
 from analyze import analyze_file, find_audio_files
+from library import record
 from separation import separate_file
 
 
@@ -67,7 +68,7 @@ def write_report(results, csv_path):
     print(f"\nWrote {len(results)} rows to {csv_path}")
 
 
-def main(folder, do_separate, csv_path):
+def main(folder, do_separate, csv_path, save=True):
     files = find_audio_files(folder)
     if not files:
         print(f"No audio files found in {folder}")
@@ -83,6 +84,13 @@ def main(folder, do_separate, csv_path):
             print()
             continue
         results.append(result)
+        if save:
+            try:
+                record(result)
+            except Exception as error:
+                # The analysis is still valid; failing to remember it
+                # shouldn't kill the scan.
+                print(f"  library:     could not record ({error})")
         print_result(result)
 
         if do_separate:
@@ -124,9 +132,14 @@ def parse_args():
         help="also write a CSV report of every analysis "
              "(default file name: report.csv)",
     )
+    parser.add_argument(
+        "--no-save",
+        action="store_true",
+        help="don't record analyses into the library database",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.folder, args.separate, args.csv)
+    main(args.folder, args.separate, args.csv, save=not args.no_save)
