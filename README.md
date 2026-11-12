@@ -58,9 +58,10 @@ Start the API server (see Setup above for activating the venv first):
 uvicorn server:app --reload
 ```
 
-Then open <http://127.0.0.1:8000/docs> for interactive API documentation
-where you can upload a file and see the JSON response, or call it from a
-terminal:
+Then open <http://127.0.0.1:8000/> for the upload page (tempo, key, and
+stems with playable/downloadable results), or
+<http://127.0.0.1:8000/docs> for the interactive API documentation. From
+a terminal:
 
 ```
 curl -F "file=@audio/some_song.flac" http://127.0.0.1:8000/analyze
@@ -91,7 +92,8 @@ docker run -p 8000:8000 audio-analyzer
 
 The image is deliberately slim (~900 MB): it installs only
 `requirements-api.txt`, which excludes torch and Demucs -- the container
-analyzes tempo and key, while separation stays on the host CLI for now.
+serves the upload page and `/analyze`, while separation stays on the
+host (the page disables the option when `/capabilities` says so).
 
 ## Development
 

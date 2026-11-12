@@ -64,3 +64,17 @@ def test_stem_of_unfinished_job_is_409(monkeypatch):
     server.JOBS["fake"] = {"job_id": "fake", "status": "running"}
     response = client.get("/separate/fake/stems/vocals")
     assert response.status_code == 409
+
+
+def test_index_page_is_served(monkeypatch):
+    client = make_client(monkeypatch)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Audio Analyzer" in response.text
+
+
+def test_capabilities_reports_separation(monkeypatch):
+    client = make_client(monkeypatch)
+    response = client.get("/capabilities")
+    assert response.status_code == 200
+    assert isinstance(response.json()["separation"], bool)

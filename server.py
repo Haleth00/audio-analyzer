@@ -9,17 +9,31 @@ POST /separate returns a job id immediately, and you poll
 GET /separate/{job_id} until the stems are ready to download.
 """
 
+import importlib.util
 import shutil
 import uuid
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 import analyze
 import separation
 
-app = FastAPI(title="Audio Analyzer", version="0.2.0")
+BASE_DIR = Path(__file__).parent
+
+# Separation needs torch and demucs, which the slim Docker container
+# deliberately leaves out. Probe for them without importing (which
+# would be slow) and let the front-end know what's on the menu.
+SEPARATION_AVAILABLE = (
+    importlib.util.find_spec("torch") is not None
+    and importlib.util.find_spec("demucs") is not None
+)
+
+app = FastAPI(title="Audio Analyzer", version="0.3.0")
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"),
+          name="static")
 
 # In-memory job registry. Fine for one process and one user; a restart
 # forgets every job, and multiple uvicorn workers would each see only
@@ -28,6 +42,18 @@ JOBS: dict[str, dict] = {}
 JOBS_DIR = Path("jobs")
 
 STEM_FILES = {"vocals": "vocals.flac", "instrumental": "no_vocals.flac"}
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    """The upload page. include_in_schema keeps /docs tidy."""
+    return FileResponse(BASE_DIR / "static" / "index.html")
+
+
+@app.get("/capabilities")
+def capabilities():
+    """What this deployment can do (the slim container: no torch)."""
+    return {"separation": SEPARATION_AVAILABLE}
 
 
 @app.get("/health")

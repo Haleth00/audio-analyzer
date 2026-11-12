@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audio Analyzer</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <h1>🎧 Audio Analyzer</h1>
+    <p class="tagline">Drop in a song — get its tempo, key, and separated stems.</p>
+
+    <form id="upload-form">
+      <label class="file-picker" for="file-input" id="file-picker">
+        <input type="file" id="file-input"
+               accept=".flac,.wav,.mp3,.ogg,.aiff,.aif,.m4a">
+        <span id="file-label">Choose an audio file…</span>
+      </label>
+
+      <label class="checkbox" id="separate-wrap">
+        <input type="checkbox" id="separate-checkbox">
+        also separate vocals / instrumental
+      </label>
+
+      <button id="go" disabled>Analyze</button>
+    </form>
+
+    <p id="error" hidden></p>
+
+    <section id="results" hidden>
+      <h2 id="result-name"></h2>
+      <dl id="facts"></dl>
+
+      <div id="separation" hidden>
+        <p id="sep-status">queued…</p>
+        <div id="stems" hidden>
+          <div class="stem">
+            <span class="stem-name">vocals</span>
+            <audio controls preload="none" id="audio-vocals"></audio>
+            <a id="dl-vocals" download="vocals.flac">download</a>
+          </div>
+          <div class="stem">
+            <span class="stem-name">instrumental</span>
+            <audio controls preload="none" id="audio-inst"></audio>
+            <a id="dl-inst" download="no_vocals.flac">download</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
