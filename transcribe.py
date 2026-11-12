@@ -6,6 +6,10 @@ slim Docker image.
 """
 
 import functools
+import tempfile
+from pathlib import Path
+
+import soundfile as sf
 
 
 @functools.cache
@@ -23,15 +27,34 @@ def get_model(name="small"):
     return whisper.load_model(name, device=device)
 
 
-def transcribe_file(path, model_name="small"):
+def transcribe_file(path, model_name="small", denoise=False):
     """Transcribe an audio file; returns dict with text and language.
+
+    With denoise=True the audio is run through DeepFilterNet first --
+    built for speech recordings (voice memos, lectures). For songs the
+    better route is transcribing the isolated vocal stem, which the
+    service's mode=vocals chains together.
 
     Fair warning baked into the design: Whisper was trained on speech,
     not singing over instruments -- expect usable but imperfect lyrics
     on real songs.
     """
     model = get_model(model_name)
-    result = model.transcribe(str(path))
+    if denoise:
+        import enhance
+
+        samples, sr = enhance.enhance_file(path)
+        # Whisper reads files (via ffmpeg), so park the enhanced
+        # samples in a temporary flac.
+        tmp = tempfile.NamedTemporaryFile(suffix=".flac", delete=False)
+        try:
+            with tmp:
+                sf.write(tmp.name, samples, sr)
+            result = model.transcribe(tmp.name)
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+    else:
+        result = model.transcribe(str(path))
     return {
         "text": result["text"].strip(),
         "language": result["language"],

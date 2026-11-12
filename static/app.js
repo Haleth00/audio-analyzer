@@ -8,6 +8,7 @@ const fileLabel = document.getElementById("file-label");
 const go = document.getElementById("go");
 const separateBox = document.getElementById("separate-checkbox");
 const transcribeBox = document.getElementById("transcribe-checkbox");
+const lyricsSource = document.getElementById("lyrics-source");
 const errorBox = document.getElementById("error");
 const results = document.getElementById("results");
 const facts = document.getElementById("facts");
@@ -20,23 +21,30 @@ const lyricsStatus = document.getElementById("lyrics-status");
 const lyricsText = document.getElementById("lyrics-text");
 
 // Ask the server what this deployment can do. The slim Docker
-// container has no torch or whisper, so it reports false and we grey
-// the options out instead of letting jobs fail.
+// container has no torch, whisper or deepfilternet, so it reports
+// false and we grey the options out instead of letting jobs fail.
 fetch("/capabilities")
   .then((r) => r.json())
   .then((cap) => {
-    for (const [box, wrap, feature, why] of [
-      [separateBox, "separate-wrap", cap.separation,
-        "not available in this deployment (separation needs torch)"],
-      [transcribeBox, "transcribe-wrap", cap.transcription,
-        "not available in this deployment (transcription needs whisper)"],
-    ]) {
-      if (!feature) {
-        box.disabled = true;
-        const el = document.getElementById(wrap);
-        el.classList.add("disabled");
-        el.title = why;
-      }
+    if (!cap.separation) {
+      separateBox.disabled = true;
+      document.getElementById("separate-wrap").classList.add("disabled");
+      document.getElementById("separate-wrap").title =
+        "not available in this deployment (separation needs torch)";
+    }
+    if (!cap.transcription) {
+      transcribeBox.disabled = true;
+      document.getElementById("transcribe-wrap").classList.add("disabled");
+      document.getElementById("transcribe-wrap").title =
+        "not available in this deployment (transcription needs whisper)";
+    }
+    // The fancier lyrics modes need the extra models.
+    for (const option of lyricsSource.options) {
+      const needs = {
+        denoised: cap.enhancement,
+        vocals: cap.enhancement && cap.separation,
+      }[option.value];
+      if (needs === false) option.disabled = true;
     }
   });
 
@@ -44,6 +52,10 @@ fileInput.addEventListener("change", () => {
   go.disabled = !fileInput.files.length;
   fileLabel.textContent =
     fileInput.files[0]?.name || "Choose an audio file…";
+});
+
+transcribeBox.addEventListener("change", () => {
+  lyricsSource.disabled = !transcribeBox.checked;
 });
 
 form.addEventListener("submit", async (event) => {
@@ -67,7 +79,9 @@ form.addEventListener("submit", async (event) => {
     // Both optional jobs can run; each handles its own polling.
     const jobs = [];
     if (separateBox.checked) jobs.push(runSeparation(file));
-    if (transcribeBox.checked) jobs.push(runTranscription(file));
+    if (transcribeBox.checked) {
+      jobs.push(runTranscription(file, lyricsSource.value));
+    }
     await Promise.all(jobs);
   } catch (error) {
     showError(error.message);
@@ -249,13 +263,16 @@ async function runSeparation(file) {
   stems.hidden = false;
 }
 
-async function runTranscription(file) {
+async function runTranscription(file, mode) {
   lyricsSection.hidden = false;
   lyricsText.hidden = true;
   lyricsStatus.textContent = "uploading…";
 
-  const job = await postFile("/transcribe", file);
-  lyricsStatus.textContent = "transcribing… singing is hard for Whisper";
+  const job = await postFile(`/transcribe?mode=${mode}`, file);
+  const message = mode === "vocals"
+    ? "separating, denoising, transcribing… (the long road)"
+    : "transcribing… singing is hard for Whisper";
+  lyricsStatus.textContent = message;
   const done = await pollJob(`/transcribe/${job.job_id}`);
 
   lyricsText.textContent =

@@ -27,6 +27,11 @@
         <input type="checkbox" id="transcribe-checkbox">
         also transcribe lyrics <span class="exp">(experimental)</span>
       </label>
+      <select id="lyrics-source" disabled>
+        <option value="mix">from the original mix</option>
+        <option value="denoised">denoised — for speech recordings</option>
+        <option value="vocals">from the isolated vocals — best for songs</option>
+      </select>
 
       <button id="go" disabled>Analyze</button>
     </form>

@@ -5,6 +5,8 @@ just write two tiny FLAC files, so these tests exercise the job
 plumbing (upload -> job id -> poll -> download) in milliseconds.
 """
 
+from pathlib import Path
+
 import numpy as np
 import soundfile as sf
 from fastapi.testclient import TestClient
@@ -81,7 +83,7 @@ def test_capabilities_reports_separation(monkeypatch):
     assert isinstance(response.json()["transcription"], bool)
 
 
-def fake_transcribe_file(path, model_name="small"):
+def fake_transcribe_file(path, model_name="small", denoise=False):
     return {"text": "la la la, la la la la", "language": "en"}
 
 
@@ -110,3 +112,58 @@ def test_transcription_job_flow(tmp_path, monkeypatch):
 def test_unknown_transcription_job_is_404(monkeypatch):
     client = make_client(monkeypatch)
     assert client.get("/transcribe/nope").status_code == 404
+
+
+def transcription_client(monkeypatch, calls):
+    """A client whose model calls just record what got routed where."""
+    def fake_transcribe_file(path, model_name="small", denoise=False):
+        calls.append(("transcribe", Path(path).name, denoise))
+        return {"text": "la", "language": "en"}
+
+    def fake_separate_file(path, out_dir):
+        calls.append(("separate",))
+        Path(out_dir, "vocals.flac").write_bytes(b"fake")
+
+    monkeypatch.setattr(server.transcribe, "transcribe_file",
+                        fake_transcribe_file)
+    monkeypatch.setattr(server.separation, "separate_file",
+                        fake_separate_file)
+    return TestClient(server.app)
+
+
+def upload(client, mode):
+    import io
+    wav = io.BytesIO(b"not really audio, the fakes never read it")
+    return client.post(
+        f"/transcribe?mode={mode}",
+        files={"file": ("song.wav", wav, "audio/wav")},
+    )
+
+
+def test_transcription_mode_mix_skips_models(tmp_path, monkeypatch):
+    calls = []
+    response = upload(transcription_client(monkeypatch, calls), "mix")
+    assert response.status_code == 202
+    assert calls == [("transcribe", "input.wav", False)]
+
+
+def test_transcription_mode_vocals_runs_the_chain(tmp_path, monkeypatch):
+    calls = []
+    response = upload(transcription_client(monkeypatch, calls), "vocals")
+    assert response.status_code == 202
+    # Separation first, then transcription of the vocal stem,
+    # denoised.
+    assert calls == [("separate",), ("transcribe", "vocals.flac", True)]
+
+
+def test_transcription_mode_denoised(tmp_path, monkeypatch):
+    calls = []
+    response = upload(transcription_client(monkeypatch, calls),
+                      "denoised")
+    assert response.status_code == 202
+    assert calls == [("transcribe", "input.wav", True)]
+
+
+def test_transcription_bad_mode_is_400(monkeypatch):
+    client = make_client(monkeypatch)
+    assert upload(client, "sideways").status_code == 400

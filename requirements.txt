@@ -1,9 +1,29 @@
+# Core analysis stack (works anywhere).
 librosa
 soundfile
-numpy
+# DeepFilterNet 0.5.6's stale metadata downgrades numpy below 2,
+# which breaks scipy -- keep it pinned.
+numpy==2.5.3
+
+# Heavy models (host only, not in requirements-api.txt).
 torch
 demucs
 openai-whisper
+
+# torchaudio (DeepFilterNet dependency, undeclared by it): the cu132
+# build matching our torch lives on PyTorch's index, not PyPI:
+#   uv pip install torchaudio --extra-index-url https://download.pytorch.org/whl/cu132
+torchaudio
+
+# DeepFilterNet: no cp312 wheel exists, and the 0.5.6 pip release is
+# incompatible with torchaudio >= 2.11 (uses removed torchaudio.backend).
+# Install from git (needs rustc + cargo, provided by the NixOS flake):
+#   uv pip install "deepfilternet @ git+https://github.com/Rikorose/DeepFilterNet#subdirectory=DeepFilterNet"
+# Then patch .venv/.../df/io.py: replace its AudioMetaData import
+# block with a local dataclass (torchaudio >= 2.11 removed the class;
+# it is only used as a type annotation). See project notes.
+
+# Web service.
 fastapi
 uvicorn
 python-multipart

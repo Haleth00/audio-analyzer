@@ -26,15 +26,16 @@ import transcribe
 
 BASE_DIR = Path(__file__).parent
 
-# Separation needs torch and demucs, transcription needs whisper --
-# none of which the slim Docker container has. Probe for them without
-# importing (which would be slow) and let the front-end know what's
-# on the menu.
+# Separation needs torch and demucs, transcription needs whisper,
+# denoising needs DeepFilterNet -- none of which the slim Docker
+# container has. Probe for them without importing (which would be
+# slow) and let the front-end know what's on the menu.
 SEPARATION_AVAILABLE = (
     importlib.util.find_spec("torch") is not None
     and importlib.util.find_spec("demucs") is not None
 )
 TRANSCRIPTION_AVAILABLE = importlib.util.find_spec("whisper") is not None
+ENHANCEMENT_AVAILABLE = importlib.util.find_spec("df") is not None
 
 app = FastAPI(title="Audio Analyzer", version="0.3.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"),
@@ -61,6 +62,7 @@ def capabilities():
     return {
         "separation": SEPARATION_AVAILABLE,
         "transcription": TRANSCRIPTION_AVAILABLE,
+        "enhancement": ENHANCEMENT_AVAILABLE,
     }
 
 
@@ -212,12 +214,20 @@ def download_stem(job_id: str, stem: str):
 
 
 @app.post("/transcribe", status_code=202)
-def start_transcription(file: UploadFile, background_tasks: BackgroundTasks):
+def start_transcription(file: UploadFile, background_tasks: BackgroundTasks,
+                        mode: str = "mix"):
     """Accept a file for lyrics transcription (another async job).
 
-    Same contract as /separate: 202 + job id, then poll
-    GET /transcribe/{job_id} until the lyrics arrive in the JSON.
+    mode picks the input Whisper gets: "mix" the original, "denoised"
+    the DeepFilterNet-cleaned audio (for speech recordings), or
+    "vocals" the Demucs vocal stem, denoised -- the best quality for
+    songs. Same contract as /separate otherwise.
     """
+    if mode not in ("mix", "denoised", "vocals"):
+        raise HTTPException(
+            status_code=400,
+            detail="mode must be one of: mix, denoised, vocals",
+        )
     suffix = Path(file.filename or "").suffix.lower()
     if suffix and suffix not in analyze.AUDIO_EXTENSIONS:
         raise HTTPException(
@@ -235,6 +245,7 @@ def start_transcription(file: UploadFile, background_tasks: BackgroundTasks):
     JOBS[job_id] = {
         "job_id": job_id,
         "kind": "transcription",
+        "mode": mode,
         "file": file.filename,
         "status": "pending",
     }
@@ -249,7 +260,14 @@ def run_transcription_job(job_id):
     job_dir = JOBS_DIR / job_id
     try:
         input_path = next(job_dir.glob("input*"))  # the one we saved
-        result = transcribe.transcribe_file(input_path)
+        path = input_path
+        if job["mode"] == "vocals":
+            # Isolate the vocal stem first; DeepFilterNet then cleans
+            # whatever instruments leaked through.
+            separation.separate_file(path, job_dir)
+            path = job_dir / "vocals.flac"
+        result = transcribe.transcribe_file(
+            path, denoise=job["mode"] != "mix")
         job["status"] = "done"
         # Lyrics are small, so they ride along in the JSON response
         # instead of being a file download like the stems.

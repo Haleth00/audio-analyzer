@@ -80,8 +80,11 @@ curl http://127.0.0.1:8000/separate/<job_id>/stems/vocals -o vocals.flac
 Separation needs torch and benefits hugely from a GPU, so it runs on
 the host server only -- not inside the slim Docker container, which
 serves `/analyze` alone. Lyrics transcription (`POST /transcribe`,
-same job protocol) needs Whisper and is host-only too; the page greys
-out whatever the deployment can't do.
+same job protocol) needs Whisper and is host-only too; it takes a
+`mode`: `mix` (original), `denoised` (DeepFilterNet first -- for
+speech recordings), or `vocals` (isolated vocal stem, denoised --
+the quality route for songs). The page greys out whatever the
+deployment can't do.
 
 ## Library
 
@@ -114,6 +117,7 @@ The upload page has a "Build a mix from this track" button too.
 - [x] Loudness / dynamics (EBU R128)
 - [x] Library database + search
 - [x] Harmonic-mix playlist builder
+- [x] Speech denoising (DeepFilterNet) with lyrics source modes
 
 ## Docker
 
