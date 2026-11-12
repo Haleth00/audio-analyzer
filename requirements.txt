@@ -3,3 +3,6 @@ soundfile
 numpy
 torch
 demucs
+fastapi
+uvicorn
+python-multipart

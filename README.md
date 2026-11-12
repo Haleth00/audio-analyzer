@@ -10,7 +10,7 @@ A Python project that analyzes songs: detect the tempo (BPM), detect the musical
 - [x] Tempo detection
 - [x] Key detection
 - [x] Vocal / instrumental separation (using a pretrained model)
-- [ ] Web interface and API
+- [x] Web interface and API
 - [ ] Docker packaging
 
 ## Setup (Windows)
@@ -36,6 +36,22 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python scan.py
+```
+
+## Web service
+
+Start the API server (see Setup above for activating the venv first):
+
+```
+uvicorn server:app --reload
+```
+
+Then open <http://127.0.0.1:8000/docs> for interactive API documentation
+where you can upload a file and see the JSON response, or call it from a
+terminal:
+
+```
+curl -F "file=@audio/some_song.flac" http://127.0.0.1:8000/analyze
 ```
 
 ## Notes
