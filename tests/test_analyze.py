@@ -8,7 +8,8 @@ tempo -- so the tests generate their own ground truth.
 import numpy as np
 import soundfile as sf
 
-from analyze import analyze_file, estimate_chords, estimate_key, estimate_tempo
+from analyze import (analyze_file, estimate_chords, estimate_key,
+                     estimate_structure, estimate_tempo)
 
 SR = 22050
 
@@ -87,6 +88,29 @@ def test_chord_progression():
     names = [s["chord"] for s in result["segments"]]
     assert names == ["C", "Am", "F", "G"]
     assert result["segments"][0]["confidence"] > 0.8
+
+
+def structured_song():
+    """A 12 s song with three timbre-distinct sections over a steady
+    click track: dark tone (0-4 s), bright tone (4-8 s), white noise
+    (8-12 s). True section boundaries sit at exactly 4 s and 8 s."""
+    click_track = clicks(120, seconds=12.0)
+    dark = tone(220.0, duration=4.0, amplitude=0.3)
+    bright = tone(1760.0, duration=4.0, amplitude=0.3)
+    noise = 0.1 * np.random.default_rng(42).normal(0, 1.0, 4 * SR)
+    return np.concatenate([dark, bright, noise]) + click_track
+
+
+def test_structure_boundaries():
+    sections = estimate_structure(structured_song(), SR)
+    assert sections is not None
+    # The real transitions at 4 s and 8 s must appear among the
+    # detected boundaries (within tolerance).
+    starts = [s["start"] for s in sections]
+    assert any(abs(t - 4.0) < 1.5 for t in starts)
+    assert any(abs(t - 8.0) < 1.5 for t in starts)
+    # And the first section is measurably darker than the second.
+    assert sections[0]["brightness_hz"] < sections[1]["brightness_hz"]
 
 
 def test_analyze_file_end_to_end(tmp_path):

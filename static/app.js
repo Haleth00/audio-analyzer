@@ -108,6 +108,27 @@ function renderFacts(data) {
   }
 
   renderChordTimeline(data.chord_segments);
+  renderStructure(data.sections);
+}
+
+function renderStructure(sections) {
+  const timeline = document.getElementById("structure-timeline");
+  timeline.replaceChildren();
+  timeline.parentElement.hidden = !sections;
+  if (!sections) return;
+  for (const s of sections) {
+    const line = document.createElement("div");
+    line.className = "chord-line";
+    const when = document.createElement("span");
+    when.className = "chord-when";
+    when.textContent = `${fmtTime(s.start)}–${fmtTime(s.end)}`;
+    const what = document.createElement("span");
+    what.textContent =
+      `${s.label} · ${s.duration_s}s · ` +
+      `${Math.round(s.brightness_hz)} Hz`;
+    line.append(when, what);
+    timeline.append(line);
+  }
 }
 
 function renderChordTimeline(segments) {

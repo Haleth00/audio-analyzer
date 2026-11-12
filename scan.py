@@ -35,6 +35,12 @@ def print_result(result):
         print(f"  chords:      {result['chord_progression']}")
     else:
         print("  chords:      could not estimate")
+    if result["sections"]:
+        print("  structure:")
+        for s in result["sections"]:
+            print(f"    {s['start']:6.1f}s  {s['label']} "
+                  f"({s['duration_s']}s, "
+                  f"brightness {s['brightness_hz']:.0f} Hz)")
 
 
 CSV_FIELDS = ["file", "duration_s", "sample_rate_hz", "channels",

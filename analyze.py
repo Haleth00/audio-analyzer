@@ -45,6 +45,10 @@ CHORD_TYPES = [
 # percussion-only, or too ambiguous to call.
 CHORD_CONFIDENCE_FLOOR = 0.6
 
+# Rough number of sections to split a song into. More would give
+# intro/verse1/verse2 granularity but risks splitting true sections.
+STRUCTURE_SECTIONS = 6
+
 
 def find_audio_files(folder):
     """Return a sorted list of audio files in `folder` (not its subfolders)."""
@@ -170,6 +174,85 @@ def estimate_chords(y, sr):
     }
 
 
+def _frame_mean(feature, frame_from, frame_to):
+    """Mean of a frame-wise feature between two frame indices.
+
+    frame_to=None means "through to the end" (the song's last section
+    has no next boundary to stop at).
+    """
+    hi = (feature.shape[0] if frame_to is None
+          else min(int(frame_to), feature.shape[0]))
+    lo = min(int(frame_from), max(hi - 1, 0))
+    return float(feature[lo:hi].mean()) if hi > lo else 0.0
+
+
+def estimate_structure(y, sr):
+    """Split a song into sections (intro/verse/chorus-like blocks).
+
+    Agglomerative clustering over beat-synchronous MFCCs: stretches of
+    beats with similar timbre merge together, and the points where the
+    cluster label changes become section boundaries. Naming the
+    sections is human judgment -- so each one is reported with
+    measurements (duration, mean energy, spectral brightness) that let
+    you tell the quiet intro from the loud chorus yourself.
+
+    Returns a list of section dicts, or None when there are too few
+    beats to segment meaningfully.
+    """
+    duration = len(y) / sr
+    _tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+    beat_frames = np.asarray(beat_frames)
+    if beat_frames.size < STRUCTURE_SECTIONS:
+        # Too few beats (pads, speech, very short clips): splitting
+        # into sections would be meaningless.
+        return None
+
+    # Boundaries include 0 so the first beat window isn't lost.
+    beat_bounds = np.concatenate([[0], beat_frames])
+    mfcc = librosa.feature.mfcc(y=y, sr=sr)
+    mfcc_beat = librosa.util.sync(mfcc, beat_bounds, aggregate=np.median)
+
+    # Boundary indices land on the beat (column) axis; converting back
+    # through beat_bounds maps them to real frame indices -> seconds.
+    section_bounds = [0] + [int(b) for b in
+                            librosa.segment.agglomerative(
+                                mfcc_beat, STRUCTURE_SECTIONS)
+                            if int(b) > 0]
+
+    # Frame-wise loudness and brightness, to describe each section.
+    rms = librosa.feature.rms(y=y)[0]
+    centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+
+    sections = []
+    for i, start_col in enumerate(section_bounds):
+        end_col = (section_bounds[i + 1]
+                   if i + 1 < len(section_bounds) else None)
+        start_frame = beat_bounds[start_col]
+        end_frame = (beat_bounds[end_col]
+                     if end_col is not None else None)
+        start_t = float(librosa.frames_to_time(start_frame, sr=sr))
+        end_t = (float(librosa.frames_to_time(end_frame, sr=sr))
+                 if end_frame is not None else duration)
+        sections.append({
+            "label": f"Section {i + 1}",
+            "start": round(start_t, 1),
+            "end": round(end_t, 1),
+            "duration_s": round(end_t - start_t, 1),
+            "mean_energy": round(_frame_mean(rms, start_frame,
+                                             end_frame), 4),
+            "brightness_hz": round(_frame_mean(centroid, start_frame,
+                                               end_frame), 0),
+        })
+
+    # Tag the extremes: often already tells you where the chorus is.
+    if len(sections) > 1:
+        max(sections, key=lambda s: s["mean_energy"])["label"] += " (loudest)"
+        min(sections, key=lambda s: s["mean_energy"])["label"] += " (quietest)"
+        max(sections, key=lambda s: s["brightness_hz"])["label"] += \
+            " (brightest)"
+    return sections
+
+
 def analyze_file(path):
     """Analyze one audio file and return the results as a dict.
 
@@ -216,5 +299,10 @@ def analyze_file(path):
     except Exception:
         result["chord_progression"] = None
         result["chord_segments"] = None
+
+    try:
+        result["sections"] = estimate_structure(y, sr)
+    except Exception:
+        result["sections"] = None
 
     return result
