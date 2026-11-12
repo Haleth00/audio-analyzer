@@ -9,7 +9,8 @@ import numpy as np
 import soundfile as sf
 
 from analyze import (analyze_file, estimate_chords, estimate_key,
-                     estimate_structure, estimate_tempo)
+                     estimate_loudness, estimate_structure,
+                     estimate_tempo)
 
 SR = 22050
 
@@ -113,6 +114,14 @@ def test_structure_boundaries():
     assert sections[0]["brightness_hz"] < sections[1]["brightness_hz"]
 
 
+def test_loudness_tracks_amplitude():
+    # LUFS is perceptual, so exact values aren't derivable by hand --
+    # but the same tone played 18x louder must measure far louder.
+    loud = tone(440.0, duration=3.0, amplitude=0.9)
+    quiet = tone(440.0, duration=3.0, amplitude=0.05)
+    assert estimate_loudness(loud, SR) > estimate_loudness(quiet, SR) + 10
+
+
 def test_analyze_file_end_to_end(tmp_path):
     """analyze_file() on a written WAV: header fields + analyses."""
     path = tmp_path / "song.wav"
@@ -127,3 +136,4 @@ def test_analyze_file_end_to_end(tmp_path):
     assert result["key"] == "C major"
     assert result["tempo_bpm"] is not None
     assert result["chord_progression"] is not None
+    assert result["loudness_lufs"] is not None

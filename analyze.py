@@ -9,6 +9,7 @@ from pathlib import Path
 
 import librosa
 import numpy as np
+import pyloudnorm as pyln
 import soundfile as sf
 
 # File endings we treat as audio. Everything else is skipped.
@@ -253,6 +254,18 @@ def estimate_structure(y, sr):
     return sections
 
 
+def estimate_loudness(y, sr):
+    """Perceived loudness in LUFS (EBU R128 integrated measure).
+
+    Unlike plain RMS this is perceptual: the signal is filtered the
+    way human hearing weights frequencies before integrating. It's
+    the number streaming services normalize to -- Spotify and YouTube
+    target roughly -14 LUFS.
+    """
+    meter = pyln.Meter(sr)
+    return round(float(meter.integrated_loudness(y)), 1)
+
+
 def analyze_file(path):
     """Analyze one audio file and return the results as a dict.
 
@@ -304,5 +317,10 @@ def analyze_file(path):
         result["sections"] = estimate_structure(y, sr)
     except Exception:
         result["sections"] = None
+
+    try:
+        result["loudness_lufs"] = estimate_loudness(y, sr)
+    except Exception:
+        result["loudness_lufs"] = None
 
     return result

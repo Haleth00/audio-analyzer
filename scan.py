@@ -26,6 +26,10 @@ def print_result(result):
         print(f"  tempo:       {result['tempo_bpm']} BPM")
     else:
         print("  tempo:       could not estimate")
+    if result["loudness_lufs"] is not None:
+        print(f"  loudness:    {result['loudness_lufs']} LUFS")
+    else:
+        print("  loudness:    could not estimate")
     if result["key"] is not None:
         print(f"  key:         {result['key']} "
               f"(correlation {result['key_confidence']})")
@@ -44,7 +48,8 @@ def print_result(result):
 
 
 CSV_FIELDS = ["file", "duration_s", "sample_rate_hz", "channels",
-              "tempo_bpm", "key", "key_confidence", "chord_progression"]
+              "tempo_bpm", "loudness_lufs", "key", "key_confidence",
+              "chord_progression"]
 
 
 def write_report(results, csv_path):

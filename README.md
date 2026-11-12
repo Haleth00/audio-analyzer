@@ -88,7 +88,7 @@ out whatever the deployment can't do.
 - [x] Lyrics transcription (Whisper)
 - [x] Chord detection
 - [x] Song structure segmentation
-- [ ] Loudness / dynamics (EBU R128)
+- [x] Loudness / dynamics (EBU R128)
 - [ ] Library database + search
 - [ ] Harmonic-mix playlist builder
 

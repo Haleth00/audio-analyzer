@@ -95,6 +95,8 @@ function renderFacts(data) {
       ? `${data.sample_rate_hz} Hz` : null],
     ["channels", data.channels],
     ["tempo", data.tempo_bpm != null ? `${data.tempo_bpm} BPM` : "unknown"],
+    ["loudness", data.loudness_lufs != null
+      ? `${data.loudness_lufs} LUFS` : "unknown"],
     ["key", data.key
       ? `${data.key} (conf ${data.key_confidence})` : "unknown"],
     ["chords", data.chord_progression || "unknown"],
