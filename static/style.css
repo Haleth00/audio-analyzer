@@ -98,6 +98,14 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-variant-numeric: tabular-nums;
 }
 .chord-when { color: var(--muted); width: 7rem; }
+.chord-why { color: var(--muted); font-size: 0.85em; padding-left: 1.5rem; }
+
+button.secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  margin-top: 0.75rem;
+}
 
 #lyrics-text {
   background: var(--bg);

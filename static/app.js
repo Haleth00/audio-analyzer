@@ -56,6 +56,8 @@ form.addEventListener("submit", async (event) => {
   separation.hidden = true;
   stems.hidden = true;
   lyricsSection.hidden = true;
+  document.getElementById("mix-button").hidden = true;
+  document.getElementById("mix-details").hidden = true;
   facts.replaceChildren();
   go.disabled = true;
   go.textContent = "working…";
@@ -111,6 +113,56 @@ function renderFacts(data) {
 
   renderChordTimeline(data.chord_segments);
   renderStructure(data.sections);
+  setupMixButton(data.file);
+}
+
+function setupMixButton(fileName) {
+  const button = document.getElementById("mix-button");
+  const details = document.getElementById("mix-details");
+  button.hidden = false;
+  button.disabled = false;
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      const response = await fetch(
+        `/playlist?start=${encodeURIComponent(fileName)}`);
+      if (!response.ok) throw new Error((await response.json()).detail);
+      renderMix(await response.json());
+    } catch (error) {
+      showError(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  };
+  details.hidden = true;
+}
+
+function renderMix(result) {
+  const list = document.getElementById("mix-list");
+  list.replaceChildren();
+  document.getElementById("mix-details").hidden = false;
+  for (let i = 0; i < result.tracks.length; i++) {
+    const t = result.tracks[i];
+    const line = document.createElement("div");
+    line.className = "chord-line";
+    const when = document.createElement("span");
+    when.className = "chord-when";
+    when.textContent = `${i + 1}.`;
+    const what = document.createElement("span");
+    what.textContent =
+      `${t.file} · ${t.tempo_bpm} BPM · ${t.camelot}`;
+    line.append(when, what);
+    list.append(line);
+    if (i < result.transitions.length) {
+      const step = result.transitions[i];
+      const why = document.createElement("div");
+      why.className = "chord-why";
+      why.textContent =
+        `↳ ${step.tempo_change_pct > 0 ? "+" : ""}` +
+        `${step.tempo_change_pct}% tempo · ${step.key_move}`;
+      list.append(why);
+    }
+  }
 }
 
 function renderStructure(sections) {

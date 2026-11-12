@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 import analyze
 import library
+import mix
 import separation
 import transcribe
 
@@ -123,6 +124,15 @@ def library_search(key: str | None = None,
     tracks = library.search(key=key, bpm_min=bpm_min, bpm_max=bpm_max,
                             order=order, limit=limit)
     return {"count": len(tracks), "tracks": tracks}
+
+
+@app.get("/playlist")
+def playlist(start: str, length: int = 8):
+    """Build a harmonic mix starting at a library track."""
+    try:
+        return mix.build_playlist(start, length=length)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error))
 
 
 @app.post("/separate", status_code=202)

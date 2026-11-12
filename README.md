@@ -95,6 +95,17 @@ python lookup.py --key "C minor" --bpm-min 100 --bpm-max 140 --order tempo
 curl "http://127.0.0.1:8000/library?key=C%20minor&order=recent"
 ```
 
+Build a DJ set from it -- consecutive tracks stay within 6% tempo and
+compatible on the Camelot wheel (same key, relative major/minor, or
+adjacent), each transition explained:
+
+```
+python mix.py "Soen - Huntress.mp3" --length 8
+curl "http://127.0.0.1:8000/playlist?start=Soen%20-%20Huntress.mp3"
+```
+
+The upload page has a "Build a mix from this track" button too.
+
 ## Planned features (free expansion)
 
 - [x] Lyrics transcription (Whisper)
@@ -102,7 +113,7 @@ curl "http://127.0.0.1:8000/library?key=C%20minor&order=recent"
 - [x] Song structure segmentation
 - [x] Loudness / dynamics (EBU R128)
 - [x] Library database + search
-- [ ] Harmonic-mix playlist builder
+- [x] Harmonic-mix playlist builder
 
 ## Docker
 
