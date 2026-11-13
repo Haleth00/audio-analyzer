@@ -45,6 +45,23 @@ app = FastAPI(title="Audio Analyzer", version="0.3.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"),
           name="static")
 
+
+@app.middleware("http")
+async def always_revalidate(request, call_next):
+    """Tell browsers to re-check pages and assets on every load.
+
+    Without this, a browser that cached yesterday's app.js renders it
+    against today's index.html -- buttons that reference elements
+    which no longer exist, i.e. a mysteriously half-broken page.
+    Revalidation is cheap (304s when nothing changed) and correct
+    for a tool that changes daily.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/static") or \
+            "text/html" in response.headers.get("content-type", ""):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 # In-memory job registry. Fine for one process and one user; a restart
 # forgets every job, and multiple uvicorn workers would each see only
 # their own dict -- a database is the eventual answer, not today.
