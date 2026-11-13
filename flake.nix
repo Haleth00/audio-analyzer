@@ -13,6 +13,10 @@
           uv
           ffmpeg
           libsndfile
+          # Rust toolchain: deepfilterlib has no cp312 wheel and must
+          # be built from source.
+          rustc
+          cargo
         ];
 
         LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
