@@ -38,6 +38,21 @@
         <option value="vocals">from the isolated vocals — best for songs</option>
       </select>
 
+      <label class="checkbox" id="practice-wrap">
+        <input type="checkbox" id="practice-checkbox">
+        make a practice track
+      </label>
+      <div id="practice-controls" hidden>
+        <label>speed
+          <input type="number" id="practice-speed" value="0.75"
+                 min="0.5" max="1.5" step="0.05">
+        </label>
+        <label>semitones
+          <input type="number" id="practice-semitones" value="0"
+                 min="-12" max="12" step="1">
+        </label>
+      </div>
+
       <button id="go" disabled>Analyze</button>
     </form>
 
@@ -57,6 +72,10 @@
         <div id="structure-timeline"></div>
       </details>
 
+      <label class="checkbox" id="practice-wrap">
+        <input type="checkbox" id="practice-checkbox">
+        make a practice track
+      </label>
       <button id="mix-button" class="secondary" hidden>
         Build a mix from this track
       </button>
@@ -73,6 +92,15 @@
       <div id="lyrics" hidden>
         <p id="lyrics-status">queued…</p>
         <pre id="lyrics-text" hidden></pre>
+      </div>
+
+      <div id="practice-section" hidden>
+        <p id="practice-status">queued…</p>
+        <div class="stem">
+          <span class="stem-name">practice</span>
+          <audio controls preload="none" id="practice-player"></audio>
+          <a id="practice-download" download="practice.flac">download</a>
+        </div>
       </div>
     </section>
   </main>

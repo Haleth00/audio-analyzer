@@ -123,6 +123,7 @@ The upload page has a "Build a mix from this track" button too.
 - [x] Library database + search
 - [x] Harmonic-mix playlist builder
 - [x] Speech denoising (DeepFilterNet) with lyrics source modes
+- [x] Practice tracks (slow down / transpose, pitch kept)
 
 ## Docker
 

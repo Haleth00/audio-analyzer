@@ -14,6 +14,7 @@ import shutil
 import uuid
 from pathlib import Path
 
+import soundfile as sf
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +23,7 @@ import analyze
 import enhance
 import library
 import mix
+import practice
 import separation
 import transcribe
 
@@ -217,6 +219,92 @@ def job_status(job_id: str):
     if job_id not in JOBS:
         raise HTTPException(status_code=404, detail="unknown job id")
     return JOBS[job_id]
+
+
+@app.post("/practice", status_code=202)
+def start_practice(file: UploadFile, background_tasks: BackgroundTasks,
+                   speed: float = 1.0, semitones: int = 0):
+    """Make a practice track: slow down (pitch kept) and/or transpose.
+
+    speed 0.75 = 75% speed; semitones -12..+12. Same job protocol as
+    the other endpoints. Pure librosa DSP -- works in the slim
+    container too.
+    """
+    if not (practice.SPEED_RANGE[0] <= speed <= practice.SPEED_RANGE[1]):
+        raise HTTPException(
+            status_code=400,
+            detail=f"speed must be between {practice.SPEED_RANGE[0]} "
+                   f"and {practice.SPEED_RANGE[1]}",
+        )
+    if not (practice.SEMITONE_RANGE[0] <= semitones
+            <= practice.SEMITONE_RANGE[1]):
+        raise HTTPException(
+            status_code=400,
+            detail=f"semitones must be between {practice.SEMITONE_RANGE[0]} "
+                   f"and {practice.SEMITONE_RANGE[1]}",
+        )
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix and suffix not in analyze.AUDIO_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"unsupported file type {suffix!r}; "
+                   f"expected one of {sorted(analyze.AUDIO_EXTENSIONS)}",
+        )
+
+    job_id = uuid.uuid4().hex[:12]
+    job_dir = JOBS_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    with open(job_dir / f"input{suffix}", "wb") as out:
+        shutil.copyfileobj(file.file, out)
+
+    JOBS[job_id] = {
+        "job_id": job_id,
+        "kind": "practice",
+        "file": file.filename,
+        "speed": speed,
+        "semitones": semitones,
+        "status": "pending",
+    }
+    background_tasks.add_task(run_practice_job, job_id)
+    return JOBS[job_id] | {"poll": f"/practice/{job_id}"}
+
+
+def run_practice_job(job_id):
+    """Do the practice-track processing; runs in a background thread."""
+    job = JOBS[job_id]
+    job["status"] = "running"
+    job_dir = JOBS_DIR / job_id
+    try:
+        input_path = next(job_dir.glob("input*"))
+        samples, sr = practice.practice_file(
+            input_path, speed=job["speed"], semitones=job["semitones"])
+        sf.write(job_dir / "practice.flac", samples, sr)
+        job["status"] = "done"
+        job["track_url"] = f"/practice/{job_id}/track"
+    except Exception as error:
+        job["status"] = "failed"
+        job["error"] = str(error)
+
+
+@app.get("/practice/{job_id}")
+def practice_status(job_id: str):
+    """Poll a practice job."""
+    if job_id not in JOBS:
+        raise HTTPException(status_code=404, detail="unknown job id")
+    return JOBS[job_id]
+
+
+@app.get("/practice/{job_id}/track")
+def practice_track(job_id: str):
+    """Download the finished practice track."""
+    if job_id not in JOBS:
+        raise HTTPException(status_code=404, detail="unknown job id")
+    job = JOBS[job_id]
+    if job["status"] != "done":
+        raise HTTPException(status_code=409,
+                            detail=f"job is {job['status']}, not done")
+    return FileResponse(JOBS_DIR / job_id / "practice.flac",
+                        media_type="audio/flac", filename="practice.flac")
 
 
 def park_all_models():

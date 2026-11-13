@@ -9,6 +9,11 @@ const go = document.getElementById("go");
 const separateBox = document.getElementById("separate-checkbox");
 const transcribeBox = document.getElementById("transcribe-checkbox");
 const lyricsSource = document.getElementById("lyrics-source");
+const practiceBox = document.getElementById("practice-checkbox");
+const practiceControls = document.getElementById("practice-controls");
+const practiceSection = document.getElementById("practice-section");
+const practiceStatus = document.getElementById("practice-status");
+const practicePlayer = document.getElementById("practice-player");
 const errorBox = document.getElementById("error");
 const results = document.getElementById("results");
 const facts = document.getElementById("facts");
@@ -58,6 +63,10 @@ transcribeBox.addEventListener("change", () => {
   lyricsSource.disabled = !transcribeBox.checked;
 });
 
+practiceBox.addEventListener("change", () => {
+  practiceControls.hidden = !practiceBox.checked;
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const file = fileInput.files[0];
@@ -68,6 +77,7 @@ form.addEventListener("submit", async (event) => {
   separation.hidden = true;
   stems.hidden = true;
   lyricsSection.hidden = true;
+  practiceSection.hidden = true;
   document.getElementById("mix-button").hidden = true;
   document.getElementById("mix-details").hidden = true;
   facts.replaceChildren();
@@ -76,11 +86,16 @@ form.addEventListener("submit", async (event) => {
 
   try {
     renderFacts(await postFile("/analyze", file));
-    // Both optional jobs can run; each handles its own polling.
+    // Optional jobs run side by side; each handles its own polling.
     const jobs = [];
     if (separateBox.checked) jobs.push(runSeparation(file));
     if (transcribeBox.checked) {
       jobs.push(runTranscription(file, lyricsSource.value));
+    }
+    if (practiceBox.checked) {
+      jobs.push(runPractice(file,
+        parseFloat(document.getElementById("practice-speed").value),
+        parseInt(document.getElementById("practice-semitones").value, 10)));
     }
     await Promise.all(jobs);
   } catch (error) {
@@ -90,6 +105,23 @@ form.addEventListener("submit", async (event) => {
     go.textContent = "Analyze";
   }
 });
+
+async function runPractice(file, speed, semitones) {
+  practiceSection.hidden = false;
+  practicePlayer.hidden = true;
+  practiceStatus.textContent = "uploading…";
+
+  const query = `speed=${speed}&semitones=${semitones}`;
+  const job = await postFile(`/practice?${query}`, file);
+  practiceStatus.textContent = "processing…";
+  const done = await pollJob(`/practice/${job.job_id}`);
+
+  practicePlayer.src = done.track_url;
+  const link = document.getElementById("practice-download");
+  link.href = done.track_url;
+  practiceStatus.textContent = "done";
+  practicePlayer.hidden = false;
+}
 
 async function postFile(url, file) {
   const body = new FormData(); // the browser sets multipart headers
