@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 import analyze
+import enhance
 import library
 import mix
 import separation
@@ -184,6 +185,8 @@ def run_job(job_id):
     except Exception as error:
         job["status"] = "failed"
         job["error"] = str(error)
+    finally:
+        park_all_models()
 
 
 @app.get("/separate/{job_id}")
@@ -192,6 +195,20 @@ def job_status(job_id: str):
     if job_id not in JOBS:
         raise HTTPException(status_code=404, detail="unknown job id")
     return JOBS[job_id]
+
+
+def park_all_models():
+    """Park every heavy model after a job.
+
+    Each module's park() forgets its cached model and returns GPU
+    memory; on a 4 GB card, leaving Demucs resident while Whisper
+    loads is a guaranteed CUDA-out-of-memory.
+    """
+    for module in (separation, enhance, transcribe):
+        try:
+            module.park()
+        except Exception:
+            pass
 
 
 @app.get("/separate/{job_id}/stems/{stem}")
@@ -265,6 +282,7 @@ def run_transcription_job(job_id):
             # Isolate the vocal stem first; DeepFilterNet then cleans
             # whatever instruments leaked through.
             separation.separate_file(path, job_dir)
+            separation.park()  # free Demucs before Whisper loads
             path = job_dir / "vocals.flac"
         result = transcribe.transcribe_file(
             path, denoise=job["mode"] != "mix")
@@ -276,6 +294,8 @@ def run_transcription_job(job_id):
     except Exception as error:
         job["status"] = "failed"
         job["error"] = str(error)
+    finally:
+        park_all_models()
 
 
 @app.get("/transcribe/{job_id}")

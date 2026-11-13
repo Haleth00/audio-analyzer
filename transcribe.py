@@ -27,6 +27,18 @@ def get_model(name="small"):
     return whisper.load_model(name, device=device)
 
 
+def park():
+    """Free the GPU (see separation.park): forget the cached model,
+    return the allocator's blocks. Reloads on next use."""
+    get_model.cache_clear()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 def transcribe_file(path, model_name="small", denoise=False):
     """Transcribe an audio file; returns dict with text and language.
 

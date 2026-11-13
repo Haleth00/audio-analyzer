@@ -29,6 +29,18 @@ def get_model():
     return model, df_state
 
 
+def park():
+    """Free the GPU (see separation.park): forget the cached model,
+    return the allocator's blocks. Reloads on next use."""
+    get_model.cache_clear()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 def enhance_file(path):
     """Denoise an audio file; returns (samples, sample_rate).
 

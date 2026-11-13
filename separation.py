@@ -30,6 +30,24 @@ def get_separator():
     return Separator(model="htdemucs", device=device)
 
 
+def park():
+    """Free the GPU: forget the cached model and return the
+    allocator's empty blocks to CUDA.
+
+    On a small card (4 GB) Demucs + Whisper + DeepFilterNet plus
+    activations don't fit at once; after a job, parking keeps the
+    next model from dying of CUDA-out-of-memory. The model reloads
+    (a few seconds) the next time it's needed.
+    """
+    get_separator.cache_clear()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass  # e.g. torch not installed (tests, slim container)
+
+
 def separate_file(path, out_dir):
     """Split one file into vocals and instrumental stems in out_dir.
 

@@ -10,5 +10,7 @@
 cd "$(dirname "$0")"
 
 export LD_LIBRARY_PATH="/run/opengl-driver/lib:${LD_LIBRARY_PATH:-}"
+# Reduce CUDA allocator fragmentation on the 4 GB card.
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 exec .venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000 "$@"
