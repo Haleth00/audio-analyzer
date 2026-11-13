@@ -60,6 +60,11 @@ def test_bpm_range_filter(tmp_path):
 def test_full_result_survives_as_json(tmp_path):
     db = tmp_path / "lib.db"
     library.record(make_result(), db)
-    row = library.search(db_path=db)[0]
+    # The list view drops result_json (it can be large); the detail
+    # view fetches it by id.
+    listing = library.search(db_path=db)[0]
+    assert "result_json" not in listing
+    track = library.get_track(listing["id"], db)
     # A column we never made searchable is still retrievable.
-    assert '"key_confidence": 0.76' in row["result_json"]
+    assert '"key_confidence": 0.76' in track["result_json"]
+    assert library.get_track(999, db) is None

@@ -26,6 +26,50 @@ main {
 h1 { margin-bottom: 0.25rem; }
 .tagline { color: var(--muted); margin-top: 0; }
 
+.nav { margin-bottom: 1rem; }
+.nav a {
+  color: var(--muted);
+  text-decoration: none;
+  margin-right: 1rem;
+}
+.nav a.current { color: var(--accent); font-weight: 600; }
+
+#filter {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  margin-bottom: 0.75rem;
+}
+
+table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+th, td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+th { color: var(--muted); font-weight: 500; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--accent); }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--card); }
+tbody tr.selected { background: var(--card); }
+td:not(:first-child) { font-variant-numeric: tabular-nums; }
+
+#detail {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+}
+#detail h2 { margin-top: 0; }
+#detail-chords { color: var(--muted); overflow-wrap: anywhere; }
+
 form {
   display: flex;
   flex-direction: column;

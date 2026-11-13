@@ -75,6 +75,41 @@ def test_index_page_is_served(monkeypatch):
     assert "Audio Analyzer" in response.text
 
 
+def test_library_page_is_served(monkeypatch):
+    client = make_client(monkeypatch)
+    response = client.get("/library")
+    assert response.status_code == 200
+    assert "Library" in response.text
+
+
+def test_library_api_and_detail(monkeypatch):
+    client = make_client(monkeypatch)
+
+    def fake_search(**kwargs):
+        return [{"id": 1, "file": "song.wav", "tempo_bpm": 120.0,
+                 "key": "C major", "loudness_lufs": -14.0,
+                 "duration_s": 60.0, "analyzed_at": "2026-11-13 10:00"}]
+
+    def fake_get_track(track_id):
+        if track_id != 1:
+            return None
+        return {"id": track_id, "file": "song.wav",
+                "result_json": '{"key": "C major"}'}
+
+    monkeypatch.setattr(server.library, "search", fake_search)
+    monkeypatch.setattr(server.library, "get_track", fake_get_track)
+
+    listing = client.get("/api/library")
+    assert listing.status_code == 200
+    assert listing.json()["count"] == 1
+
+    detail = client.get("/api/library/1")
+    assert detail.status_code == 200
+    assert "result_json" in detail.json()
+
+    assert client.get("/api/library/999").status_code == 404
+
+
 def test_capabilities_reports_separation(monkeypatch):
     client = make_client(monkeypatch)
     response = client.get("/capabilities")

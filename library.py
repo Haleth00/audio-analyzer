@@ -84,8 +84,10 @@ def search(key=None, bpm_min=None, bpm_max=None,
            order="file", limit=100, db_path=DB_PATH):
     """Find tracks: exact key match, tempo range, chosen ordering.
 
-    All values travel as ? parameters; only the whitelisted ORDER BY
-    expression is interpolated into the SQL string.
+    Returns table columns only (no result_json -- that can be large
+    and is fetched per-track by get_track). All values travel as ?
+    parameters; only the whitelisted ORDER BY expression is
+    interpolated into the SQL string.
     """
     where, params = [], []
     if key:
@@ -98,7 +100,9 @@ def search(key=None, bpm_min=None, bpm_max=None,
         where.append("tempo_bpm <= ?")
         params.append(bpm_max)
 
-    sql = "SELECT * FROM tracks"
+    sql = ("SELECT id, file, duration_s, sample_rate_hz, channels, "
+           "tempo_bpm, loudness_lufs, key, key_confidence, "
+           "chord_progression, analyzed_at FROM tracks")
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += f" ORDER BY {ORDER_COLUMNS[order]} LIMIT ?"
@@ -106,3 +110,11 @@ def search(key=None, bpm_min=None, bpm_max=None,
 
     with closing(connect(db_path)) as con:
         return [dict(row) for row in con.execute(sql, params)]
+
+
+def get_track(track_id, db_path=DB_PATH):
+    """Fetch one track by id, including the full result JSON."""
+    with closing(connect(db_path)) as con:
+        row = con.execute("SELECT * FROM tracks WHERE id = ?",
+                          (track_id,)).fetchone()
+        return dict(row) if row else None

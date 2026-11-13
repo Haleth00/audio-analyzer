@@ -96,8 +96,11 @@ re-analyzing a file replaces its row.
 ```
 python scan.py --no-save        # scan without recording
 python lookup.py --key "C minor" --bpm-min 100 --bpm-max 140 --order tempo
-curl "http://127.0.0.1:8000/library?key=C%20minor&order=recent"
+curl "http://127.0.0.1:8000/api/library?key=C%20minor&order=recent"
 ```
+
+Or browse it: open <http://127.0.0.1:8000/library> for the sortable,
+searchable table with per-track detail and mix building.
 
 Build a DJ set from it -- consecutive tracks stay within 6% tempo and
 compatible on the Camelot wheel (same key, relative major/minor, or

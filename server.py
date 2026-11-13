@@ -57,6 +57,12 @@ def index():
     return FileResponse(BASE_DIR / "static" / "index.html")
 
 
+@app.get("/library", include_in_schema=False)
+def library_page():
+    """The collection browser: everything ever analyzed."""
+    return FileResponse(BASE_DIR / "static" / "library.html")
+
+
 @app.get("/capabilities")
 def capabilities():
     """What this deployment can do (the slim container: no torch)."""
@@ -109,13 +115,14 @@ def analyze_upload(file: UploadFile):
         tmp.unlink(missing_ok=True)
 
 
-@app.get("/library")
+@app.get("/api/library")
 def library_search(key: str | None = None,
                    bpm_min: float | None = None,
                    bpm_max: float | None = None,
                    order: str = "file",
                    limit: int = 100):
-    """Search the recorded analysis library.
+    """Search the recorded analysis library (the JSON behind
+    /library).
 
     Query parameters become function arguments automatically.
     """
@@ -127,6 +134,15 @@ def library_search(key: str | None = None,
     tracks = library.search(key=key, bpm_min=bpm_min, bpm_max=bpm_max,
                             order=order, limit=limit)
     return {"count": len(tracks), "tracks": tracks}
+
+
+@app.get("/api/library/{track_id}")
+def library_track(track_id: int):
+    """One track's full analysis, including the stored result JSON."""
+    track = library.get_track(track_id)
+    if track is None:
+        raise HTTPException(status_code=404, detail="unknown track id")
+    return track
 
 
 @app.get("/playlist")

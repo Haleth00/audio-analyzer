@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Library — Audio Analyzer</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <nav class="nav">
+      <a href="/">analyze</a>
+      <a href="/library" class="current">library</a>
+    </nav>
+
+    <h1>📚 Library</h1>
+    <p class="tagline">Everything ever analyzed, remembered. Click a row
+      for the full picture.</p>
+
+    <input type="search" id="filter" placeholder="filter by name, key, bpm…">
+
+    <table id="tracks">
+      <thead>
+        <tr>
+          <th data-key="file" class="sortable">file</th>
+          <th data-key="tempo_bpm" class="sortable">BPM</th>
+          <th data-key="key" class="sortable">key</th>
+          <th data-key="loudness_lufs" class="sortable">LUFS</th>
+          <th data-key="duration_s" class="sortable">length</th>
+          <th data-key="analyzed_at" class="sortable">analyzed</th>
+        </tr>
+      </thead>
+      <tbody id="tracks-body"></tbody>
+    </table>
+    <p id="empty" hidden>No tracks yet — analyze something on the
+      <a href="/">upload page</a> first.</p>
+
+    <section id="detail" hidden>
+      <h2 id="detail-name"></h2>
+      <dl id="detail-facts"></dl>
+      <p id="detail-chords"></p>
+      <div id="detail-structure"></div>
+      <button id="mix-button" class="secondary">Build a mix from this
+        track</button>
+      <details id="mix-details" hidden>
+        <summary>suggested mix</summary>
+        <div id="mix-list"></div>
+      </details>
+    </section>
+  </main>
+  <script src="/static/library.js"></script>
+</body>
+</html>
