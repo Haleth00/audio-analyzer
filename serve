@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Start the audio-analyzer web service.
+#
+# Run it from anywhere:  ~/audio-analyzer/serve
+# Add flags:             ~/audio-analyzer/serve --reload
+#
+# Assumes direnv has loaded the project devshell (automatic when you
+# cd into the project); the CUDA library path is appended in case it
+# isn't exported yet.
+cd "$(dirname "$0")"
+
+export LD_LIBRARY_PATH="/run/opengl-driver/lib:${LD_LIBRARY_PATH:-}"
+
+exec .venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000 "$@"

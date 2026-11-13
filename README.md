@@ -52,10 +52,11 @@ python scan.py [folder] [--separate] [--csv [FILE]]
 
 ## Web service
 
-Start the API server (see Setup above for activating the venv first):
+Start the API server from the project directory (direnv loads the
+environment on cd):
 
 ```
-uvicorn server:app --reload
+./serve            # or ./serve --reload for auto-restart on edits
 ```
 
 Then open <http://127.0.0.1:8000/> for the upload page (tempo, key, and
