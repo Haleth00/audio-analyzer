@@ -64,6 +64,18 @@ def enhance_file(path):
                                 target_sr=target_sr).T
 
     audio = torch.from_numpy(data.T)  # -> (channels, frames)
+
+    # Enhance in 30-second chunks: DeepFilterNet's STFT tensors for a
+    # whole song at once are gigabytes on the GPU, which a small card
+    # cannot hold alongside anything else. Chunk boundaries reset the
+    # model's internal state; at 30 s the seams are inaudible and
+    # irrelevant for transcription.
+    chunk_frames = target_sr * 30
+    chunks = []
     with torch.no_grad():
-        enhanced = enhance(model, df_state, audio)
+        for start in range(0, audio.shape[-1], chunk_frames):
+            piece = audio[:, start:start + chunk_frames]
+            chunks.append(enhance(model, df_state, piece))
+    enhanced = torch.cat(chunks, dim=-1)
+
     return enhanced.numpy().T, target_sr  # -> (frames, channels)

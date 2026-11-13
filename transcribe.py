@@ -51,21 +51,26 @@ def transcribe_file(path, model_name="small", denoise=False):
     not singing over instruments -- expect usable but imperfect lyrics
     on real songs.
     """
-    model = get_model(model_name)
+    model = None
     if denoise:
         import enhance
 
         samples, sr = enhance.enhance_file(path)
+        # Free DeepFilterNet's GPU memory before Whisper loads --
+        # on a 4 GB card they don't fit together.
+        enhance.park()
         # Whisper reads files (via ffmpeg), so park the enhanced
         # samples in a temporary flac.
         tmp = tempfile.NamedTemporaryFile(suffix=".flac", delete=False)
         try:
             with tmp:
                 sf.write(tmp.name, samples, sr)
+            model = get_model(model_name)
             result = model.transcribe(tmp.name)
         finally:
             Path(tmp.name).unlink(missing_ok=True)
     else:
+        model = get_model(model_name)
         result = model.transcribe(str(path))
     return {
         "text": result["text"].strip(),
