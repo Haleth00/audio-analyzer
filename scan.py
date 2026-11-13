@@ -15,6 +15,7 @@ from pathlib import Path
 from analyze import analyze_file, find_audio_files
 from library import record
 from separation import separate_file
+from tagging import tag_file
 
 
 def print_result(result):
@@ -68,7 +69,7 @@ def write_report(results, csv_path):
     print(f"\nWrote {len(results)} rows to {csv_path}")
 
 
-def main(folder, do_separate, csv_path, save=True):
+def main(folder, do_separate, csv_path, save=True, do_tag=False):
     files = find_audio_files(folder)
     if not files:
         print(f"No audio files found in {folder}")
@@ -91,6 +92,11 @@ def main(folder, do_separate, csv_path, save=True):
                 # The analysis is still valid; failing to remember it
                 # shouldn't kill the scan.
                 print(f"  library:     could not record ({error})")
+        if do_tag and (result["tempo_bpm"] or result["key"]):
+            try:
+                tag_file(path, result["tempo_bpm"], result["key"])
+            except Exception as error:
+                print(f"  tags:        could not write ({error})")
         print_result(result)
 
         if do_separate:
@@ -137,9 +143,16 @@ def parse_args():
         action="store_true",
         help="don't record analyses into the library database",
     )
+    parser.add_argument(
+        "--tag",
+        action="store_true",
+        help="write BPM and key into the files' own tags "
+             "(modifies files in place; other tags are preserved)",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.folder, args.separate, args.csv, save=not args.no_save)
+    main(args.folder, args.separate, args.csv,
+         save=not args.no_save, do_tag=args.tag)
