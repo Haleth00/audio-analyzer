@@ -1,5 +1,7 @@
 """Tests for practice-track DSP and its job endpoint."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 import soundfile as sf
@@ -38,10 +40,27 @@ def fake_practice_file(path, speed=1.0, semitones=0):
     return np.zeros((2205, 1), dtype=np.float32), 22050
 
 
-def test_practice_job_flow(tmp_path, monkeypatch):
+def practice_client(monkeypatch, calls):
+    def fake_separate_file(path, out_dir):
+        calls.append(("separate",))
+        for name in ("vocals", "drums", "bass", "other", "no_vocals"):
+            sf.write(out_dir / f"{name}.flac",
+                     np.zeros(2205, dtype=np.float32), 22050)
+
+    def recording_practice_file(path, speed=1.0, semitones=0):
+        calls.append(("practice", Path(path).name, speed, semitones))
+        return fake_practice_file(path, speed, semitones)
+
     monkeypatch.setattr(server.practice, "practice_file",
-                        fake_practice_file)
-    client = TestClient(server.app)
+                        recording_practice_file)
+    monkeypatch.setattr(server.separation, "separate_file",
+                        fake_separate_file)
+    return TestClient(server.app)
+
+
+def test_practice_job_flow(tmp_path, monkeypatch):
+    calls = []
+    client = practice_client(monkeypatch, calls)
 
     wav = make_song(tmp_path / "upload.flac", seconds=1.0)
     with open(wav, "rb") as f:
@@ -53,16 +72,35 @@ def test_practice_job_flow(tmp_path, monkeypatch):
     job = response.json()
     assert job["speed"] == 0.75
     assert job["semitones"] == -2
+    assert job["stem"] == "mix"
 
     state = client.get(f"/practice/{job['job_id']}").json()
     assert state["status"] == "done"
     track = client.get(f"/practice/{job['job_id']}/track")
     assert track.status_code == 200
     assert track.headers["content-type"] == "audio/flac"
+    # Full-mix practice never touches Demucs.
+    assert calls == [("practice", "input.flac", 0.75, -2)]
+
+
+def test_practice_on_a_stem_runs_the_chain(tmp_path, monkeypatch):
+    calls = []
+    client = practice_client(monkeypatch, calls)
+
+    wav = make_song(tmp_path / "upload.flac", seconds=1.0)
+    with open(wav, "rb") as f:
+        response = client.post(
+            "/practice?speed=0.5&stem=bass",
+            files={"file": ("song.flac", f, "audio/flac")},
+        )
+    assert response.status_code == 202
+    state = client.get(f"/practice/{response.json()['job_id']}").json()
+    assert state["status"] == "done"
+    assert calls == [("separate",), ("practice", "bass.flac", 0.5, 0)]
 
 
 def test_practice_rejects_bad_ranges(monkeypatch):
-    client = TestClient(server.app)
+    client = practice_client(monkeypatch, [])
     import io
     assert client.post(
         "/practice?speed=0.1",
@@ -70,5 +108,9 @@ def test_practice_rejects_bad_ranges(monkeypatch):
     ).status_code == 400
     assert client.post(
         "/practice?semitones=24",
+        files={"file": ("s.flac", io.BytesIO(b"x"), "audio/flac")},
+    ).status_code == 400
+    assert client.post(
+        "/practice?stem=triangle",
         files={"file": ("s.flac", io.BytesIO(b"x"), "audio/flac")},
     ).status_code == 400

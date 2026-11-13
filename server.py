@@ -265,14 +265,20 @@ def job_status(job_id: str):
     return JOBS[job_id]
 
 
+PRACTICE_STEMS = ("mix", "vocals", "drums", "bass", "other")
+
+
 @app.post("/practice", status_code=202)
 def start_practice(file: UploadFile, background_tasks: BackgroundTasks,
-                   speed: float = 1.0, semitones: int = 0):
+                   speed: float = 1.0, semitones: int = 0,
+                   stem: str = "mix"):
     """Make a practice track: slow down (pitch kept) and/or transpose.
 
-    speed 0.75 = 75% speed; semitones -12..+12. Same job protocol as
-    the other endpoints. Pure librosa DSP -- works in the slim
-    container too.
+    speed 0.75 = 75% speed; semitones -12..+12. stem picks what to
+    practice: the full mix, or one isolated Demucs stem (drums, bass,
+    other -- guitars and keys live in "other"). Same job protocol as
+    the other endpoints. The mix path is pure librosa and works in
+    the slim container; stems need Demucs (host only).
     """
     if not (practice.SPEED_RANGE[0] <= speed <= practice.SPEED_RANGE[1]):
         raise HTTPException(
@@ -286,6 +292,11 @@ def start_practice(file: UploadFile, background_tasks: BackgroundTasks,
             status_code=400,
             detail=f"semitones must be between {practice.SEMITONE_RANGE[0]} "
                    f"and {practice.SEMITONE_RANGE[1]}",
+        )
+    if stem not in PRACTICE_STEMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"stem must be one of: {', '.join(PRACTICE_STEMS)}",
         )
     suffix = Path(file.filename or "").suffix.lower()
     if suffix and suffix not in analyze.AUDIO_EXTENSIONS:
@@ -307,6 +318,7 @@ def start_practice(file: UploadFile, background_tasks: BackgroundTasks,
         "file": file.filename,
         "speed": speed,
         "semitones": semitones,
+        "stem": stem,
         "status": "pending",
     }
     background_tasks.add_task(run_practice_job, job_id)
@@ -319,15 +331,25 @@ def run_practice_job(job_id):
     job["status"] = "running"
     job_dir = JOBS_DIR / job_id
     try:
-        input_path = next(job_dir.glob("input*"))
+        input_path = next(job_dir.glob("input*"))  # the one we saved
+        path = input_path
+        if job["stem"] != "mix":
+            # Isolate the requested stem first, then free Demucs'
+            # GPU memory before the DSP stage (same discipline as the
+            # lyrics chain).
+            separation.separate_file(path, job_dir)
+            separation.park()
+            path = job_dir / f"{job['stem']}.flac"
         samples, sr = practice.practice_file(
-            input_path, speed=job["speed"], semitones=job["semitones"])
+            path, speed=job["speed"], semitones=job["semitones"])
         sf.write(job_dir / "practice.flac", samples, sr)
         job["status"] = "done"
         job["track_url"] = f"/practice/{job_id}/track"
     except Exception as error:
         job["status"] = "failed"
         job["error"] = str(error)
+    finally:
+        park_all_models()
 
 
 @app.get("/practice/{job_id}")

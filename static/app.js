@@ -51,6 +51,10 @@ fetch("/capabilities")
       }[option.value];
       if (needs === false) option.disabled = true;
     }
+    // Practice-on-a-stem needs Demucs; the plain mix path doesn't.
+    for (const option of document.getElementById("practice-stem").options) {
+      if (option.value !== "mix" && !cap.separation) option.disabled = true;
+    }
   });
 
 fileInput.addEventListener("change", () => {
@@ -95,7 +99,8 @@ form.addEventListener("submit", async (event) => {
     if (practiceBox.checked) {
       jobs.push(runPractice(file,
         parseFloat(document.getElementById("practice-speed").value),
-        parseInt(document.getElementById("practice-semitones").value, 10)));
+        parseInt(document.getElementById("practice-semitones").value, 10),
+        document.getElementById("practice-stem").value));
     }
     await Promise.all(jobs);
   } catch (error) {
@@ -106,14 +111,16 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-async function runPractice(file, speed, semitones) {
+async function runPractice(file, speed, semitones, stem) {
   practiceSection.hidden = false;
   practicePlayer.hidden = true;
   practiceStatus.textContent = "uploading…";
 
-  const query = `speed=${speed}&semitones=${semitones}`;
+  const query = `speed=${speed}&semitones=${semitones}&stem=${stem}`;
   const job = await postFile(`/practice?${query}`, file);
-  practiceStatus.textContent = "processing…";
+  practiceStatus.textContent = stem === "mix"
+    ? "processing…"
+    : `separating the ${stem} stem, then processing…`;
   const done = await pollJob(`/practice/${job.job_id}`);
 
   practicePlayer.src = done.track_url;
