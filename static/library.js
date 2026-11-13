@@ -62,10 +62,110 @@ function renderTable() {
       td.textContent = value ?? "—";
       tr.append(td);
     }
+    const actions = document.createElement("td");
+    actions.className = "row-actions";
+    tr.append(actions);
+    if (t.has_audio) {
+      const button = document.createElement("button");
+      button.textContent = "separate";
+      button.addEventListener("click", (e) => {
+        e.stopPropagation();
+        separateOne(t.id, actions);
+      });
+      actions.append(button);
+    } else {
+      const note = document.createElement("span");
+      note.className = "muted";
+      note.textContent = "no audio stored";
+      actions.append(note);
+    }
     tr.addEventListener("click", () => showDetail(t.id, tr));
     tbody.append(tr);
   }
 }
+
+async function separateOne(trackId, cell) {
+  cell.replaceChildren(waitingNote("queued…"));
+  try {
+    const response = await fetch(`/library/${trackId}/separate`,
+                                 { method: "POST" });
+    if (!response.ok) throw new Error((await response.json()).detail);
+    const job = await response.json();
+    cell.replaceChildren(waitingNote("separating…"));
+    const done = await pollJob(job.poll);
+    fillStemLinks(cell, done.stems);
+  } catch (error) {
+    cell.replaceChildren(waitingNote(error.message));
+  }
+}
+
+function waitingNote(text) {
+  const span = document.createElement("span");
+  span.className = "muted";
+  span.textContent = text;
+  return span;
+}
+
+function fillStemLinks(cell, stems) {
+  cell.replaceChildren();
+  for (const [name, url] of Object.entries(stems)) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.textContent = name;
+    cell.append(link);
+  }
+}
+
+async function pollJob(pollPath) {
+  return new Promise((resolve, reject) => {
+    const timer = setInterval(async () => {
+      try {
+        const response = await fetch(pollPath);
+        if (!response.ok) throw new Error("job vanished");
+        const state = await response.json();
+        if (state.status === "done") {
+          clearInterval(timer);
+          resolve(state);
+        } else if (state.status === "failed") {
+          clearInterval(timer);
+          reject(new Error(state.error));
+        }
+      } catch (error) {
+        clearInterval(timer);
+        reject(error);
+      }
+    }, 2000);
+  });
+}
+
+document.getElementById("separate-all").onclick = async () => {
+  const status = document.getElementById("batch-status");
+  status.textContent = "queueing…";
+  try {
+    const response = await fetch("/separate-all", { method: "POST" });
+    if (!response.ok) throw new Error((await response.json()).detail);
+    const batch = await response.json();
+    let finished = 0;
+    status.textContent = `0 / ${batch.count} done`;
+    for (const job of batch.jobs) {
+      pollJob(job.poll).then((done) => {
+        const row = tracks.find((t) => t.file === job.file);
+        if (row) {
+          const cell = tbody.querySelector(
+            `tr[data-id="${row.id}"] .row-actions`);
+          if (cell) fillStemLinks(cell, done.stems);
+        }
+        finished += 1;
+        status.textContent = `${finished} / ${batch.count} done`;
+      }).catch(() => {
+        finished += 1;
+        status.textContent = `${finished} / ${batch.count} (some failed)`;
+      });
+    }
+  } catch (error) {
+    status.textContent = error.message;
+  }
+};
 
 async function showDetail(id, row) {
   document.querySelectorAll("#tracks-body tr").forEach((r) =>

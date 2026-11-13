@@ -129,12 +129,21 @@ def analyze_upload(file: UploadFile):
         # Report the name the client sent, not our temp file's name.
         if file.filename:
             result["file"] = file.filename
+        # Keep a copy so separation/practice can run on this track
+        # from the library later, without a re-upload.
+        stored = library.AUDIO_DIR / f"{uuid.uuid4().hex}{suffix}"
+        stored.parent.mkdir(parents=True, exist_ok=True)
         try:
-            library.record(result)
+            shutil.copyfile(tmp, stored)
+            library.record(result, audio_path=stored)
         except Exception:
             # The analysis succeeded; failing to remember it must not
             # fail the request.
-            pass
+            stored.unlink(missing_ok=True)
+            try:
+                library.record(result)
+            except Exception:
+                pass
         return result
     finally:
         # Runs whether analysis succeeded or raised.
@@ -159,6 +168,11 @@ def library_search(key: str | None = None,
         )
     tracks = library.search(key=key, bpm_min=bpm_min, bpm_max=bpm_max,
                             order=order, limit=limit)
+    for track in tracks:
+        audio = track.pop("audio_path", None)
+        # Can't separate what we can't reach (uploads before audio
+        # storage, or a moved/deleted original).
+        track["has_audio"] = bool(audio) and Path(audio).exists()
     return {"count": len(tracks), "tracks": tracks}
 
 
@@ -204,6 +218,66 @@ def compare_uploads(mix: UploadFile, reference: UploadFile):
     finally:
         mix_path.unlink(missing_ok=True)
         ref_path.unlink(missing_ok=True)
+
+
+def _create_separation_job(source_path, display_name):
+    """Register a separation job reading audio from source_path.
+
+    The audio is copied into the job dir under the name run_job
+    expects (input*), whether it came from an upload or the library.
+    """
+    job_id = uuid.uuid4().hex[:12]
+    job_dir = JOBS_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source_path,
+                    job_dir / ("input" + Path(source_path).suffix))
+    JOBS[job_id] = {
+        "job_id": job_id,
+        "kind": "separation",
+        "file": display_name,
+        "status": "pending",
+    }
+    return job_id
+
+
+@app.post("/library/{track_id}/separate", status_code=202)
+def separate_library_track(track_id: int,
+                           background_tasks: BackgroundTasks):
+    """Separate a stored library track (no re-upload needed)."""
+    track = library.get_track(track_id)
+    if track is None:
+        raise HTTPException(status_code=404, detail="unknown track id")
+    audio = track.get("audio_path")
+    if not audio or not Path(audio).exists():
+        raise HTTPException(
+            status_code=409,
+            detail="this track has no reachable audio "
+                   "(analyzed before audio storage, or the original "
+                   "file moved) -- re-upload it once",
+        )
+    job_id = _create_separation_job(audio, track["file"])
+    background_tasks.add_task(run_job, job_id)
+    return JOBS[job_id] | {"poll": f"/separate/{job_id}"}
+
+
+@app.post("/separate-all", status_code=202)
+def separate_everything(background_tasks: BackgroundTasks):
+    """Queue separation jobs for every library track with reachable
+    audio. Returns the job ids; poll each via /separate/{id}."""
+    job_ids = []
+    for track in library.search(limit=1000, order="recent"):
+        audio = track.get("audio_path")
+        if audio and Path(audio).exists():
+            job_id = _create_separation_job(audio, track["file"])
+            background_tasks.add_task(run_job, job_id)
+            job_ids.append(job_id)
+    if not job_ids:
+        raise HTTPException(
+            status_code=409,
+            detail="no library tracks have reachable audio",
+        )
+    return {"count": len(job_ids),
+            "jobs": [JOBS[j] | {"poll": f"/separate/{j}"} for j in job_ids]}
 
 
 @app.post("/separate", status_code=202)

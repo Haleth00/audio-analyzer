@@ -27,6 +27,10 @@ h1 { margin-bottom: 0.25rem; }
 .tagline { color: var(--muted); margin-top: 0; }
 
 .nav { margin-bottom: 1rem; }
+.library-actions { margin-bottom: 0.75rem; display: flex; gap: 1rem; align-items: center; }
+.muted { color: var(--muted); }
+.row-actions button { padding: 0.15rem 0.6rem; font-size: 0.85rem; }
+.row-actions a { margin-right: 0.5rem; }
 .nav a {
   color: var(--muted);
   text-decoration: none;

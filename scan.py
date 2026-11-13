@@ -87,7 +87,9 @@ def main(folder, do_separate, csv_path, save=True, do_tag=False):
         results.append(result)
         if save:
             try:
-                record(result)
+                # The original file is its own stored audio: it stays
+                # put on disk, so the library just remembers where.
+                record(result, audio_path=path)
             except Exception as error:
                 # The analysis is still valid; failing to remember it
                 # shouldn't kill the scan.

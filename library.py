@@ -14,6 +14,7 @@ from contextlib import closing
 from pathlib import Path
 
 DB_PATH = Path.home() / ".local" / "share" / "audio-analyzer" / "library.db"
+AUDIO_DIR = Path.home() / ".local" / "share" / "audio-analyzer" / "audio"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tracks (
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     key_confidence REAL,
     chord_progression TEXT,
     result_json TEXT,
+    audio_path TEXT,
     analyzed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS tracks_file_duration
@@ -46,17 +48,33 @@ ORDER_COLUMNS = {
 
 
 def connect(db_path=DB_PATH):
-    """Open the library, creating the database if it doesn't exist."""
+    """Open the library, creating the database if it doesn't exist.
+
+    Also upgrades databases from before the audio_path column: the
+    schema above only applies to fresh creates, so older tables get
+    the column added by hand.
+    """
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row  # rows behave like dicts
     con.executescript(SCHEMA)
+    columns = {row["name"] for row in con.execute("PRAGMA table_info(tracks)")}
+    if "audio_path" not in columns:
+        con.execute("ALTER TABLE tracks ADD COLUMN audio_path TEXT")
+        con.commit()
     return con
 
 
-def record(result, db_path=DB_PATH):
+def record(result, db_path=DB_PATH, audio_path=None):
     """Save one analyze_file() result; re-analyses replace the row.
+
+    audio_path points at a playable copy of the file (the original
+    for CLI scans, a stored copy for uploads), enabling separation
+    and practice jobs to run on library tracks without re-uploading.
+
+    db_path stays the second parameter so existing positional
+    callers (tests especially) keep meaning what they meant.
 
     INSERT OR REPLACE works because of the unique index on
     (file, duration_s): a second analysis of the same recording
@@ -68,15 +86,16 @@ def record(result, db_path=DB_PATH):
             INSERT OR REPLACE INTO tracks
                 (file, duration_s, sample_rate_hz, channels,
                  tempo_bpm, loudness_lufs, key, key_confidence,
-                 chord_progression, result_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 chord_progression, result_json, audio_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (result.get("file"), result.get("duration_s"),
              result.get("sample_rate_hz"), result.get("channels"),
              result.get("tempo_bpm"), result.get("loudness_lufs"),
              result.get("key"), result.get("key_confidence"),
              result.get("chord_progression"),
-             json.dumps(result, default=str)),
+             json.dumps(result, default=str),
+             str(audio_path) if audio_path else None),
         )
 
 
@@ -102,7 +121,7 @@ def search(key=None, bpm_min=None, bpm_max=None,
 
     sql = ("SELECT id, file, duration_s, sample_rate_hz, channels, "
            "tempo_bpm, loudness_lufs, key, key_confidence, "
-           "chord_progression, analyzed_at FROM tracks")
+           "chord_progression, audio_path, analyzed_at FROM tracks")
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += f" ORDER BY {ORDER_COLUMNS[order]} LIMIT ?"

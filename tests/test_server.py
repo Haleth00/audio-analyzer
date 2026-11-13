@@ -90,7 +90,8 @@ def test_library_api_and_detail(monkeypatch):
     def fake_search(**kwargs):
         return [{"id": 1, "file": "song.wav", "tempo_bpm": 120.0,
                  "key": "C major", "loudness_lufs": -14.0,
-                 "duration_s": 60.0, "analyzed_at": "2026-11-13 10:00"}]
+                 "duration_s": 60.0, "analyzed_at": "2026-11-13 10:00",
+                 "audio_path": "/nonexistent/song.wav"}]
 
     def fake_get_track(track_id):
         if track_id != 1:
@@ -103,13 +104,70 @@ def test_library_api_and_detail(monkeypatch):
 
     listing = client.get("/api/library")
     assert listing.status_code == 200
-    assert listing.json()["count"] == 1
+    # audio_path never leaks to clients; a boolean does.
+    assert listing.json()["tracks"][0]["has_audio"] is False
+    assert "audio_path" not in listing.json()["tracks"][0]
 
     detail = client.get("/api/library/1")
     assert detail.status_code == 200
     assert "result_json" in detail.json()
 
     assert client.get("/api/library/999").status_code == 404
+
+
+def test_separate_from_library(tmp_path, monkeypatch):
+    monkeypatch.setattr(server.separation, "separate_file",
+                        fake_separate_file)
+
+    audio = tmp_path / "stored.flac"
+    audio.write_bytes(b"fake stored audio")
+
+    monkeypatch.setattr(
+        server.library, "get_track",
+        lambda tid: {"id": tid, "file": "song.wav",
+                     "audio_path": str(audio)})
+
+    client = TestClient(server.app)
+    response = client.post("/library/7/separate")
+    assert response.status_code == 202
+    job = response.json()
+    state = client.get(f"/separate/{job['job_id']}").json()
+    assert state["status"] == "done"
+    assert set(state["stems"]) == {"vocals", "instrumental",
+                                   "drums", "bass", "other"}
+
+
+def test_separate_from_library_without_audio(monkeypatch):
+    monkeypatch.setattr(
+        server.library, "get_track",
+        lambda tid: {"id": tid, "file": "song.wav", "audio_path": None})
+    client = TestClient(server.app)
+    assert client.post("/library/7/separate").status_code == 409
+
+
+def test_separate_all_queues_every_reachable_track(tmp_path, monkeypatch):
+    monkeypatch.setattr(server.separation, "separate_file",
+                        fake_separate_file)
+
+    good = tmp_path / "a.flac"
+    good.write_bytes(b"x")
+    gone = tmp_path / "moved.flac"
+
+    monkeypatch.setattr(
+        server.library, "search",
+        lambda **kwargs: [
+            {"id": 1, "file": "here.wav", "audio_path": str(good)},
+            {"id": 2, "file": "gone.wav", "audio_path": str(gone)},
+            {"id": 3, "file": "old.wav", "audio_path": None},
+        ])
+
+    client = TestClient(server.app)
+    response = client.post("/separate-all")
+    assert response.status_code == 202
+    batch = response.json()
+    assert batch["count"] == 1          # only the reachable one
+    state = client.get(batch["jobs"][0]["poll"]).json()
+    assert state["status"] == "done"
 
 
 def test_capabilities_reports_separation(monkeypatch):
