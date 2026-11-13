@@ -5,6 +5,7 @@ import from here, so there is exactly one implementation of each
 analysis.
 """
 
+from collections import Counter
 from pathlib import Path
 
 import librosa
@@ -33,13 +34,26 @@ KEY_TEMPLATES = [
     ),
 ]
 
-# Chord vocabulary as pitch-class offsets from the root: a major triad
-# is root + major third (4 semitones) + fifth (7 semitones); a minor
-# triad uses the minor third (3 semitones). "" names C major as "C",
-# "m" names A minor as "Am".
+# Chord vocabulary: (name suffix, pitch-class offsets from the root).
+# The full family a 12-bin chromagram can honestly tell apart:
+# triads, sixths and sevenths -- 14 types x 12 roots = 168 templates.
+# Extended voicings (9ths, 11ths, alterations) blur into their 7th
+# parents on a chromagram, so they resolve to the nearest parent.
 CHORD_TYPES = [
-    ("", [0, 4, 7]),
-    ("m", [0, 3, 7]),
+    ("",      [0, 4, 7]),        # major
+    ("m",     [0, 3, 7]),        # minor
+    ("dim",   [0, 3, 6]),        # diminished
+    ("aug",   [0, 4, 8]),        # augmented
+    ("sus2",  [0, 2, 7]),
+    ("sus4",  [0, 5, 7]),
+    ("6",     [0, 4, 7, 9]),     # major sixth
+    ("m6",    [0, 3, 7, 9]),     # minor sixth
+    ("7",     [0, 4, 7, 10]),    # dominant seventh
+    ("maj7",  [0, 4, 7, 11]),    # major seventh
+    ("m7",    [0, 3, 7, 10]),    # minor seventh
+    ("mMaj7", [0, 3, 7, 11]),    # minor with major seventh
+    ("m7b5",  [0, 3, 6, 10]),    # half-diminished
+    ("dim7",  [0, 3, 6, 9]),     # fully diminished
 ]
 
 # Below this similarity a beat counts as "no chord" (N/C) -- silence,
@@ -102,18 +116,39 @@ def _cosine(a, b):
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
 
 
-def _best_chord(chroma_snapshot):
-    """Match one beat's chroma snapshot against all 24 triads.
+def _chord_template(root_step, offsets):
+    """Weighted template: root strongest, other chord tones next.
 
-    Returns (name, similarity); name is "N/C" when nothing clears the
-    confidence floor.
+    The weights mirror how chords are actually voiced -- the root
+    dominates, everything else supports -- and beat the flat/binary
+    templates on real music. Non-chord pitch classes keep a small
+    floor so a snapshot never scores high on an unrelated template.
+    """
+    template = np.full(12, 0.05)
+    template[root_step % 12] = 1.0
+    for offset in offsets[1:]:
+        template[(root_step + offset) % 12] = 0.8
+    return template
+
+
+def _best_chord(chroma_snapshot):
+    """Match one beat's chroma snapshot against all 168 templates.
+
+    A small complexity penalty (0.01 per note beyond a triad) breaks
+    near-ties toward the simpler chord -- if C and Cmaj7 score almost
+    equally, C wins. Returns (name, similarity); "N/C" when nothing
+    clears the confidence floor.
     """
     best_name, best_score = "N/C", CHORD_CONFIDENCE_FLOOR
     for step, root in enumerate(PITCH_CLASSES):
         for suffix, offsets in CHORD_TYPES:
-            template = np.zeros(12)
-            template[[(step + offset) % 12 for offset in offsets]] = 1.0
-            score = _cosine(chroma_snapshot, template)
+            template = _chord_template(step, offsets)
+            # Complexity penalty: 0.035 per note beyond a triad. On
+            # arpeggiated music, melody notes light up the 7th slot of
+            # four-note templates by accident -- a chord has to earn
+            # its extra names by matching strongly, not marginally.
+            score = _cosine(chroma_snapshot, template) \
+                - 0.035 * (len(offsets) - 3)
             if score > best_score:
                 best_score, best_name = score, f"{root}{suffix}"
     return best_name, round(best_score, 2)
@@ -160,6 +195,18 @@ def estimate_chords(y, sr):
             "end": round(float(times[i + 1]), 1),
             "confidence": confidence,
         })
+
+    # Temporal smoothing: chords shouldn't flicker beat to beat. A
+    # majority vote over a 5-beat window removes single-beat misfires
+    # (a melody note landing on the 7th of a template) while keeping
+    # genuine changes, which last several beats.
+    window_votes = []
+    for i in range(len(segments)):
+        window = segments[max(0, i - 2):i + 3]
+        winner = Counter(s["chord"] for s in window).most_common(1)[0][0]
+        window_votes.append(winner)
+    for segment, winner in zip(segments, window_votes):
+        segment["chord"] = winner
 
     # Squash runs of the same chord into one segment.
     merged = []

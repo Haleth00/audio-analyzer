@@ -113,7 +113,7 @@ The upload page has a "Build a mix from this track" button too.
 ## Planned features (free expansion)
 
 - [x] Lyrics transcription (Whisper)
-- [x] Chord detection
+- [x] Chord detection (full triad / sixth / seventh vocabulary)
 - [x] Song structure segmentation
 - [x] Loudness / dynamics (EBU R128)
 - [x] Library database + search

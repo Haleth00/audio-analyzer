@@ -48,6 +48,17 @@ def triad(root, kind="", duration=2.0):
     )
 
 
+def chord(root, suffix, duration=2.0):
+    """A chord from the full vocabulary by its suffix, matching
+    CHORD_TYPES: chord("C", "maj7"), chord("G", "7"), ..."""
+    from analyze import CHORD_TYPES
+    offsets = dict(CHORD_TYPES)[suffix]
+    return sum(
+        tone(NOTES[root] * 2 ** (offset / 12), duration, amplitude=0.3)
+        for offset in offsets
+    )
+
+
 def clicks(bpm, seconds=8.0):
     """A click track: a short 1 kHz burst on every beat."""
     out = np.zeros(int(SR * seconds))
@@ -89,6 +100,22 @@ def test_chord_progression():
     names = [s["chord"] for s in result["segments"]]
     assert names == ["C", "Am", "F", "G"]
     assert result["segments"][0]["confidence"] > 0.8
+
+
+def test_every_chord_type_is_detected():
+    # One representative per chord type in the vocabulary.
+    samples = [
+        ("C", ""), ("G", "m"), ("D", "dim"), ("A", "aug"),
+        ("F", "sus2"), ("E", "sus4"),
+        ("C", "6"), ("G", "m6"), ("D", "7"), ("A", "maj7"),
+        ("F", "m7"), ("E", "mMaj7"), ("C", "m7b5"), ("G", "dim7"),
+    ]
+    for root, suffix in samples:
+        y = chord(root, suffix)
+        result = estimate_chords(y, SR)
+        detected = result["segments"][0]["chord"]
+        assert detected == f"{root}{suffix}", \
+            f"{root}{suffix} detected as {detected}"
 
 
 def structured_song():
