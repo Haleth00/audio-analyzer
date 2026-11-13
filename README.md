@@ -85,8 +85,11 @@ serves `/analyze` alone. Lyrics transcription (`POST /transcribe`,
 same job protocol) needs Whisper and is host-only too; it takes a
 `mode`: `mix` (original), `denoised` (DeepFilterNet first -- for
 speech recordings), or `vocals` (isolated vocal stem, denoised --
-the quality route for songs). The page greys out whatever the
-deployment can't do.
+the quality route for songs). Practice tracks (`POST /practice`,
+slow-down/transpose) and reference-mix comparison (`POST /compare`,
+two uploads) are pure librosa/pyloudnorm DSP and work everywhere,
+container included. The page greys out whatever the deployment
+can't do.
 
 ## Library
 
@@ -124,6 +127,7 @@ The upload page has a "Build a mix from this track" button too.
 - [x] Harmonic-mix playlist builder
 - [x] Speech denoising (DeepFilterNet) with lyrics source modes
 - [x] Practice tracks (slow down / transpose, pitch kept)
+- [x] Reference-mix comparison (loudness, spectral balance, dynamics)
 
 ## Docker
 

@@ -336,3 +336,79 @@ function showError(message) {
 function hide(element) {
   element.hidden = true;
 }
+
+// --- Reference comparison (its own form) ---
+
+const compareForm = document.getElementById("compare-form");
+const mixInput = document.getElementById("mix-input");
+const refInput = document.getElementById("ref-input");
+const compareGo = document.getElementById("compare-go");
+
+for (const [input, label] of [
+  [mixInput, "mix-label"], [refInput, "ref-label"],
+]) {
+  input.addEventListener("change", () => {
+    document.getElementById(label).textContent =
+      input.files[0]?.name || (input === mixInput ? "your mix…" : "reference track…");
+    compareGo.disabled = !(mixInput.files.length && refInput.files.length);
+  });
+}
+
+compareForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  hide(errorBox);
+  compareGo.disabled = true;
+  compareGo.textContent = "comparing…";
+  try {
+    const body = new FormData();
+    body.append("mix", mixInput.files[0]);
+    body.append("reference", refInput.files[0]);
+    const response = await fetch("/compare", { method: "POST", body });
+    if (!response.ok) {
+      throw new Error((await response.json()).detail || response.statusText);
+    }
+    renderComparison(await response.json());
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    compareGo.disabled = false;
+    compareGo.textContent = "Compare";
+  }
+});
+
+function renderComparison(result) {
+  const section = document.getElementById("compare-results");
+  section.hidden = false;
+  document.getElementById("compare-title").textContent =
+    `${result.mix.file || "mix"} vs ${result.reference.file || "reference"}`;
+
+  const notes = document.getElementById("compare-notes");
+  notes.replaceChildren();
+  for (const note of result.notes) {
+    const li = document.createElement("li");
+    li.textContent = note;
+    notes.append(li);
+  }
+
+  const bands = document.getElementById("compare-bands");
+  bands.replaceChildren();
+  for (const band of result.bands) {
+    const row = document.createElement("div");
+    row.className = "band-row";
+    const name = document.createElement("span");
+    name.className = "band-name";
+    name.textContent = `${band.name} (${band.from}–${band.to})`;
+    const track = document.createElement("div");
+    track.className = "bar-track";
+    const bar = document.createElement("div");
+    bar.className = "bar " + (band.delta_db >= 0 ? "heavy" : "light");
+    // Scale ±6 dB across the whole bar.
+    bar.style.width = `${Math.min(Math.abs(band.delta_db), 6) / 6 * 100}%`;
+    track.append(bar);
+    const value = document.createElement("span");
+    value.className = "band-value";
+    value.textContent = `${band.delta_db > 0 ? "+" : ""}${band.delta_db} dB`;
+    row.append(name, track, value);
+    bands.append(row);
+  }
+}

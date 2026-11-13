@@ -56,6 +56,27 @@
       <button id="go" disabled>Analyze</button>
     </form>
 
+    <form id="compare-form">
+      <h2 class="section-title">Compare against a reference</h2>
+      <label class="file-picker" for="mix-input">
+        <input type="file" id="mix-input"
+               accept=".flac,.wav,.mp3,.ogg,.aiff,.aif,.m4a">
+        <span id="mix-label">your mix…</span>
+      </label>
+      <label class="file-picker" for="ref-input">
+        <input type="file" id="ref-input"
+               accept=".flac,.wav,.mp3,.ogg,.aiff,.aif,.m4a">
+        <span id="ref-label">reference track…</span>
+      </label>
+      <button id="compare-go" disabled>Compare</button>
+    </form>
+
+    <section id="compare-results" hidden>
+      <h2 id="compare-title"></h2>
+      <ul id="compare-notes"></ul>
+      <div id="compare-bands"></div>
+    </section>
+
     <p id="error" hidden></p>
 
     <section id="results" hidden>

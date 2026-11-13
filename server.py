@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 import analyze
+import compare
 import enhance
 import library
 import mix
@@ -160,6 +161,32 @@ def playlist(start: str, length: int = 8):
         return mix.build_playlist(start, length=length)
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error))
+
+
+@app.post("/compare")
+def compare_uploads(mix: UploadFile, reference: UploadFile):
+    """Compare your mix against a reference track.
+
+    Two uploads, one JSON answer: loudness, spectral balance per
+    band, dynamics -- all relative to the reference. Pure DSP, no
+    models, fast enough to answer synchronously.
+    """
+    mix_path = Path("/tmp") / f"compare-{uuid.uuid4().hex}"
+    ref_path = Path("/tmp") / f"compare-{uuid.uuid4().hex}"
+    try:
+        with open(mix_path, "wb") as out:
+            shutil.copyfileobj(mix.file, out)
+        with open(ref_path, "wb") as out:
+            shutil.copyfileobj(reference.file, out)
+        result = compare.compare_files(mix_path, ref_path)
+        if mix.filename:
+            result["mix"]["file"] = mix.filename
+        if reference.filename:
+            result["reference"]["file"] = reference.filename
+        return result
+    finally:
+        mix_path.unlink(missing_ok=True)
+        ref_path.unlink(missing_ok=True)
 
 
 @app.post("/separate", status_code=202)
