@@ -255,10 +255,25 @@ async function runSeparation(file) {
   sepStatus.textContent = "separating… this can take a while";
   const done = await pollJob(`/separate/${job.job_id}`);
 
-  document.getElementById("audio-vocals").src = done.vocals_url;
-  document.getElementById("audio-inst").src = done.instrumental_url;
-  document.getElementById("dl-vocals").href = done.vocals_url;
-  document.getElementById("dl-inst").href = done.instrumental_url;
+  stems.replaceChildren();
+  for (const [name, url] of Object.entries(done.stems)) {
+    const row = document.createElement("div");
+    row.className = "stem";
+    const label = document.createElement("span");
+    label.className = "stem-name";
+    label.textContent = name;
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.preload = "none";
+    audio.src = url;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = url.split("/").pop() === "no_vocals.flac"
+      ? "no_vocals.flac" : `${name}.flac`;
+    link.textContent = "download";
+    row.append(label, audio, link);
+    stems.append(row);
+  }
   sepStatus.textContent = "done";
   stems.hidden = false;
 }

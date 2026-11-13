@@ -49,23 +49,26 @@ def park():
 
 
 def separate_file(path, out_dir):
-    """Split one file into vocals and instrumental stems in out_dir.
+    """Split one file into Demucs' four stems plus an instrumental.
 
-    Demucs separates into four stems -- vocals, drums, bass, other --
-    which sum back into the original mix. So "instrumental" here is
-    simply the other three stems added together.
+    Demucs separates into vocals, drums, bass and other, which sum
+    back to the original mix; no_vocals.flac is the three non-vocal
+    stems added together -- karaoke-ready in one step.
     """
     separator = get_separator()
     # The API returns (original_mix, stems) where stems is a dict like
     # {"drums": tensor, "bass": tensor, "other": tensor, "vocals":
     # tensor}, each of shape (channels, samples).
     _original, stems = separator.separate_audio_file(path)
-    instrumental = stems["drums"] + stems["bass"] + stems["other"]
 
     out_dir.mkdir(parents=True, exist_ok=True)
     # soundfile wants (frames, channels); the stems are (channels,
-    # frames), hence the transpose. Note Demucs resamples everything to
-    # its own rate (44.1 kHz), even if the input was 48 kHz.
+    # frames), hence the transpose. Note Demucs resamples everything
+    # to its own rate (44.1 kHz), even if the input was 48 kHz.
     sr = separator.samplerate
-    sf.write(out_dir / "vocals.flac", stems["vocals"].cpu().numpy().T, sr)
-    sf.write(out_dir / "no_vocals.flac", instrumental.cpu().numpy().T, sr)
+    for name, tensor in stems.items():
+        sf.write(out_dir / f"{name}.flac", tensor.cpu().numpy().T, sr)
+
+    instrumental = stems["drums"] + stems["bass"] + stems["other"]
+    sf.write(out_dir / "no_vocals.flac",
+             instrumental.cpu().numpy().T, sr)

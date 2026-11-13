@@ -15,10 +15,10 @@ import server
 
 
 def fake_separate_file(path, out_dir):
-    """Stand-in for Demucs: write two very short silent stems."""
+    """Stand-in for Demucs: write the five short silent stems."""
     silence = np.zeros(22050)
-    sf.write(out_dir / "vocals.flac", silence, 22050)
-    sf.write(out_dir / "no_vocals.flac", silence, 22050)
+    for name in ("vocals", "drums", "bass", "other", "no_vocals"):
+        sf.write(out_dir / f"{name}.flac", silence, 22050)
 
 
 def make_client(monkeypatch):
@@ -48,10 +48,12 @@ def test_separation_job_flow(tmp_path, monkeypatch):
     assert job["status"] == "pending"
 
     status = client.get(f"/separate/{job['job_id']}")
-    assert status.json()["vocals_url"] == \
-        f"/separate/{job['job_id']}/stems/vocals"
+    stems = status.json()["stems"]
+    assert set(stems) == {"vocals", "instrumental", "drums", "bass",
+                          "other"}
+    assert stems["drums"] == f"/separate/{job['job_id']}/stems/drums"
 
-    stem = client.get(f"/separate/{job['job_id']}/stems/vocals")
+    stem = client.get(f"/separate/{job['job_id']}/stems/drums")
     assert stem.status_code == 200
     assert stem.headers["content-type"] == "audio/flac"
 

@@ -47,7 +47,7 @@ python scan.py [folder] [--separate] [--csv [FILE]] [--tag]
 ```
 
 - `[folder]` — the folder to scan (default: `audio/`)
-- `--separate` — also write vocals/instrumental FLAC stems to `separated/` (needs a GPU to be pleasant)
+- `--separate` — also write FLAC stems to `separated/`: Demucs' four tracks (vocals, drums, bass, other) plus `no_vocals` for karaoke (needs a GPU to be pleasant)
 - `--csv [FILE]` — also write a CSV report of every analysis (default name: `report.csv`), sortable in any spreadsheet
 - `--tag` — write BPM and key into the files' own tags (mp3: TBPM/TKEY, flac/ogg: Vorbis comments), so DJ software imports them pre-analyzed. Modifies files in place; other tags are preserved.
 

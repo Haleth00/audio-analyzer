@@ -48,7 +48,13 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"),
 JOBS: dict[str, dict] = {}
 JOBS_DIR = Path("jobs")
 
-STEM_FILES = {"vocals": "vocals.flac", "instrumental": "no_vocals.flac"}
+STEM_FILES = {
+    "vocals": "vocals.flac",
+    "instrumental": "no_vocals.flac",
+    "drums": "drums.flac",
+    "bass": "bass.flac",
+    "other": "other.flac",
+}
 
 
 @app.get("/", include_in_schema=False)
@@ -196,8 +202,8 @@ def run_job(job_id):
         input_path = next(job_dir.glob("input*"))  # the one we saved
         separation.separate_file(input_path, job_dir)
         job["status"] = "done"
-        job["vocals_url"] = f"/separate/{job_id}/stems/vocals"
-        job["instrumental_url"] = f"/separate/{job_id}/stems/instrumental"
+        job["stems"] = {name: f"/separate/{job_id}/stems/{name}"
+                        for name in STEM_FILES}
     except Exception as error:
         job["status"] = "failed"
         job["error"] = str(error)
